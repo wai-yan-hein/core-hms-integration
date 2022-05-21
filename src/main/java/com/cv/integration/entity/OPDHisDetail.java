@@ -30,7 +30,17 @@ public class OPDHisDetail implements java.io.Serializable {
     private String referFeeAmt;
     @Column(name = "srv_fees6")
     private String readFeeAmt;
-
+    @ManyToOne
+    @JoinColumn(name = "reader_doctor_id")
+    private Doctor reader;
+    @ManyToOne
+    @JoinColumn(name = "refer_doctor_id")
+    private Doctor refer;
+    @ManyToOne
+    @JoinColumn(name = "tech_id")
+    private Doctor technician;
+    @Column(name = "qty")
+    private Double qty;
 
     public OPDHisDetail() {
     }

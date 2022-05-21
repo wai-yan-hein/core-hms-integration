@@ -22,6 +22,8 @@ public class AutoUpload {
     private String syncDate;
     @Value("${upload.trader}")
     private String uploadTrader;
+    @Value("${upload.doctor}")
+    private String uploadDoctor;
     @Value("${upload.sale}")
     private String uploadSale;
     @Value("${upload.purchase}")
@@ -59,16 +61,20 @@ public class AutoUpload {
     @Autowired
     private final TraderRepo traderRepo;
     @Autowired
+    private final DoctorRepo doctorRepo;
+    @Autowired
     private final PaymentHisRepo paymentHis;
     @Autowired
     private final GenExpenseRepo genExpenseRepo;
     private boolean syncing = false;
 
-    @Scheduled(fixedRate = 300000)
+    @Scheduled(fixedRate = 10 * 60 * 1000)
     private void autoUpload() {
         if (!syncing) {
+            log.info("autoUpload: Start");
             syncing = true;
             uploadTrader();
+            uploadDoctor();
             uploadSaleVoucher();
             uploadPurchaseVoucher();
             uploadReturnInVoucher();
@@ -89,6 +95,16 @@ public class AutoUpload {
             if (!traders.isEmpty()) {
                 log.info(String.format("uploadTrader: %s", traders.size()));
                 traders.forEach(t -> listener.sendTrader(t.getTraderCode()));
+            }
+        }
+    }
+
+    private void uploadDoctor() {
+        if (Util1.getBoolean(uploadDoctor)) {
+            List<Doctor> doctors = doctorRepo.unUploadDoctor();
+            if (!doctors.isEmpty()) {
+                log.info(String.format("uploadDoctor: %s", doctors.size()));
+                doctors.forEach(t -> listener.sendDoctor(t.getDoctorId()));
             }
         }
     }

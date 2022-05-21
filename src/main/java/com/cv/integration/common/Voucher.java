@@ -5,6 +5,7 @@
  */
 package com.cv.integration.common;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
 import java.util.Date;
@@ -14,11 +15,13 @@ import java.util.List;
  * @author Lenovo
  */
 @Data
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class Voucher {
 
     private String vouNo;
     private String tranId;
     private Date vouDate;
+    private String vouDateStr;
     private String currency;
     private String compCode;
     private String description;
@@ -33,6 +36,7 @@ public class Voucher {
     private Double paidAmt;
     private Boolean deleted;
     private String patientCode;
+    private String admissionNo;
     private String patientName;
     private String defaultPatient;
     private String depCode;
@@ -42,5 +46,19 @@ public class Voucher {
     private String traderName;
     private String appType;
     private List<VoucherList> listVoucher;
+    private String locationName;
+    private String doctorName;
+    private String vouTypeName;
+    private Double amount;
+    private Double qty;
+    private String qtyStr;
+    private Double price;
+    private String unit;
+    private String stockName;
+    private String discount;
+    private String focQty;
+    private String createdBy;
+    private String remark;
+    private String expireDate;
 
 }

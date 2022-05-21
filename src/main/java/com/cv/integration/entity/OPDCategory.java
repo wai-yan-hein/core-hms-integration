@@ -3,10 +3,7 @@ package com.cv.integration.entity;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import javax.persistence.*;
 
 @Getter
 @Setter
@@ -36,6 +33,9 @@ public class OPDCategory implements java.io.Serializable {
     private String readFeeAcc;
     @Column(name = "payable_acc_id")
     private String payableAcc;
+    @ManyToOne
+    @JoinColumn(name = "group_id")
+    private OPDGroup group;
 
     public OPDCategory() {
     }

@@ -26,8 +26,8 @@ public class SaleHis implements java.io.Serializable {
     @Id
     @Column(name = "sale_inv_id")
     private String vouNo;
+    @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "sale_date")
-    @Temporal(TemporalType.DATE)
     private Date vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
@@ -55,4 +55,8 @@ public class SaleHis implements java.io.Serializable {
     private String admissionNo;
     @Column(name = "intg_upd_status")
     private String intgUpdStatus;
+    @Column(name = "stu_name")
+    private String name;
+    @Column(name = "vou_status")
+    private Integer vouStatusId;
 }

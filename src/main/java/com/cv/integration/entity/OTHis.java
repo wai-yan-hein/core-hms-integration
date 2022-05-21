@@ -15,7 +15,7 @@ public class OTHis implements java.io.Serializable {
     @Column(name = "ot_inv_id")
     private String vouNo;
     @Column(name = "ot_date")
-    @Temporal(TemporalType.DATE)
+    @Temporal(TemporalType.TIMESTAMP)
     private Date vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;

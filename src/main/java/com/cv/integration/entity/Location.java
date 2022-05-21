@@ -22,6 +22,8 @@ public class Location implements java.io.Serializable {
     private String accCode;
     @Column(name = "acc_dept_code")
     private String deptCode;
+    @Column(name = "trader_code")
+    private String traderCode;
 
     public Location() {
     }

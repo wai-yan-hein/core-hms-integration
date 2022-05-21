@@ -28,6 +28,8 @@ public class DCHisDetail {
     private String techFeeAmt;
     @Column(name = "srv_fee4")
     private String moFeeAmt;
+    @Column(name = "qty")
+    private Double qty;
     public DCHisDetail() {
     }
 }

@@ -15,7 +15,7 @@ public class OPDHis implements java.io.Serializable {
     @Column(name = "opd_inv_id")
     private String vouNo;
     @Column(name = "opd_date")
-    @Temporal(TemporalType.DATE)
+    @Temporal(TemporalType.TIMESTAMP)
     private Date vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
@@ -37,6 +37,8 @@ public class OPDHis implements java.io.Serializable {
     @ManyToOne()
     @JoinColumn(name = "patient_id")
     private Patient patient;
+    @Column(name = "patient_name")
+    private String patientName;
 
     public OPDHis() {
     }

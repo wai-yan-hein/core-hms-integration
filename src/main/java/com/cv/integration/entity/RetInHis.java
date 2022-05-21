@@ -26,7 +26,7 @@ public class RetInHis implements java.io.Serializable {
     @Column(name = "ret_in_id")
     private String vouNo;
     @Column(name = "ret_in_date")
-    @Temporal(TemporalType.DATE)
+    @Temporal(TemporalType.TIMESTAMP)
     private Date vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
@@ -49,4 +49,7 @@ public class RetInHis implements java.io.Serializable {
     private String admissionNo;
     @Column(name = "intg_upd_status")
     private String intgUpdStatus;
+    @ManyToOne
+    @JoinColumn(name = "location")
+    private Location location;
 }

@@ -28,4 +28,6 @@ public class OTHisDetail implements java.io.Serializable {
     private String nurseFeeAmt;
     @Column(name = "srv_fee4")
     private String moFeeAmt;
+    @Column(name = "qty")
+    private Double qty;
 }

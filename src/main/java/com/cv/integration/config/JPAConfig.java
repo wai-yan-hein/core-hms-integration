@@ -1,14 +1,18 @@
 package com.cv.integration.config;
 
 import com.google.common.base.Preconditions;
-import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.annotation.PersistenceExceptionTranslationPostProcessor;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.orm.hibernate5.HibernateTransactionManager;
+import org.springframework.orm.hibernate5.LocalSessionFactoryBean;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.JpaVendorAdapter;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
@@ -20,14 +24,32 @@ import javax.sql.DataSource;
 import java.util.Objects;
 import java.util.Properties;
 
-@Configuration
 
-@AllArgsConstructor
+@Configuration
 @EnableTransactionManagement
-@PropertySource("file:config/application.properties")
+@PropertySource(value = {"file:config/application.properties"})
+@EnableAutoConfiguration(exclude = {HibernateJpaAutoConfiguration.class})
+@Slf4j
 public class JPAConfig {
     @Autowired
     private Environment env;
+
+    @Bean
+    public LocalSessionFactoryBean sessionFactory() {
+        LocalSessionFactoryBean sessionFactory = new LocalSessionFactoryBean();
+        sessionFactory.setDataSource(dataSource());
+        sessionFactory.setPackagesToScan("com.cv.integration.entity");
+        sessionFactory.setHibernateProperties(additionalProperties());
+        log.info("sessionFactory");
+        return sessionFactory;
+    }
+
+    @Bean("hibernate")
+    public PlatformTransactionManager platformTransactionManager() {
+        final HibernateTransactionManager transactionManager = new HibernateTransactionManager();
+        transactionManager.setSessionFactory(this.sessionFactory().getObject());
+        return transactionManager;
+    }
 
     // beans
     @Bean
@@ -38,7 +60,6 @@ public class JPAConfig {
         final JpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
         em.setJpaVendorAdapter(vendorAdapter);
         em.setJpaProperties(additionalProperties());
-
         return em;
     }
     @Bean

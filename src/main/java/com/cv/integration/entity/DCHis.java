@@ -15,7 +15,7 @@ public class DCHis implements java.io.Serializable {
     @Column(name = "dc_inv_id")
     private String vouNo;
     @Column(name = "dc_date")
-    @Temporal(TemporalType.DATE)
+    @Temporal(TemporalType.TIMESTAMP)
     private Date vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;

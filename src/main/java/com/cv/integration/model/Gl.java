@@ -34,6 +34,9 @@ public class Gl implements java.io.Serializable {
     @NonNull
     private Integer macId;
     private boolean cash = false;
+    private String coaParent;
+    private String migId;
+    private String migName;
 
     public Gl() {
     }

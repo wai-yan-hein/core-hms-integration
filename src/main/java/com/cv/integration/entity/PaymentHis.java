@@ -33,6 +33,9 @@ public class PaymentHis implements java.io.Serializable {
     private Double discount;
     @Column(name = "intg_upd_status")
     private String intgUpdStatus;
+    @ManyToOne
+    @JoinColumn(name = "pay_id")
+    private PaymentType paymentType;
 
     public PaymentHis() {
     }

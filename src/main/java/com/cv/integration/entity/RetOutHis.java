@@ -26,7 +26,7 @@ public class RetOutHis implements java.io.Serializable {
     @Column(name = "ret_out_id")
     private String vouNo;
     @Column(name = "ret_out_date")
-    @Temporal(TemporalType.DATE)
+    @Temporal(TemporalType.TIMESTAMP)
     private Date vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
@@ -44,4 +44,7 @@ public class RetOutHis implements java.io.Serializable {
     private Currency currency;
     @Column(name = "intg_upd_status")
     private String intgUpdStatus;
+    @ManyToOne
+    @JoinColumn(name = "location")
+    private Location location;
 }
