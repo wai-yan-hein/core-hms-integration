@@ -1,9 +1,15 @@
 package com.cv.integration.entity;
 
-import lombok.*;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.Hibernate;
 
-import javax.persistence.*;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
 import java.util.Objects;
 
 @Getter
@@ -18,9 +24,9 @@ public class Doctor implements java.io.Serializable {
     private String doctorId;
     @Column(name = "doctor_name")
     private String doctorName;
-    @ManyToOne
-    @JoinColumn(name = "dr_type")
-    private DoctorType drType;
+    //@ManyToOne
+    //@JoinColumn(name = "dr_type")
+    //private DoctorType drType;
     @Column(name = "active")
     private boolean active;
     @Column(name = "intg_upd_status")

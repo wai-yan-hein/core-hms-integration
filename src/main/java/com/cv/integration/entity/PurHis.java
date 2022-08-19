@@ -48,4 +48,6 @@ public class PurHis implements java.io.Serializable {
     @ManyToOne
     @JoinColumn(name = "location")
     private Location location;
+    @Column(name = "remark")
+    private String remark;
 }

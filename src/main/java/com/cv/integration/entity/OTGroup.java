@@ -32,6 +32,8 @@ public class OTGroup implements java.io.Serializable {
     private String moFeeAcc;
     @Column(name = "payable_acc_id")
     private String payableAcc;
+    @Column(name = "intg_upd_status")
+    private String intgUpdStatus;
 
     public OTGroup() {
     }

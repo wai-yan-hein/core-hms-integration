@@ -1,12 +1,12 @@
 package com.cv.integration.entity;
 
-import lombok.*;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.Hibernate;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import javax.persistence.*;
 import java.util.Objects;
 
 @Getter
@@ -19,6 +19,8 @@ public class Trader {
     @Id
     @Column(name = "trader_id")
     private String traderCode;
+    @Column(name = "stu_no")
+    private String userCode;
     @Column(name = "trader_name")
     private String traderName;
     @Column(name = "discriminator")
@@ -27,6 +29,9 @@ public class Trader {
     private boolean active;
     @Column(name = "intg_upd_status")
     private String intgUpdStatus;
+    @ManyToOne
+    @JoinColumn(name = "group_id")
+    private TraderGroup traderGroup;
 
     @Override
     public boolean equals(Object o) {

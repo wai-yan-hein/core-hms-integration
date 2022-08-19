@@ -36,6 +36,9 @@ public class OPDCategory implements java.io.Serializable {
     @ManyToOne
     @JoinColumn(name = "group_id")
     private OPDGroup group;
+    @Column(name = "intg_upd_status")
+    private String intgUpdStatus;
+
 
     public OPDCategory() {
     }

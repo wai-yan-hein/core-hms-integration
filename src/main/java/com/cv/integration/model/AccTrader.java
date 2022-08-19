@@ -17,11 +17,15 @@ public class AccTrader implements java.io.Serializable {
     private Boolean active;
     @NonNull
     private String discriminator;
-    private String account;
+    private String accountCode;
+    private String accountName;
+    private String accountParent;
+    private String groupCode;
     @NonNull
     private Integer macId;
     @NonNull
     private String compCode;
+    private String createdBy;
 
     public AccTrader() {
     }

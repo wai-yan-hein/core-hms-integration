@@ -63,4 +63,10 @@ public class AppConfig {
         return sys.isPresent() ? sys.get().getPropValue() : "0";
     }
 
+    @Bean
+    public String packageId() {
+        Optional<SysProperty> sys = sysPropertyRepo.findById("system.dc.pkggain.id");
+        return sys.isPresent() ? sys.get().getPropValue() : "0";
+    }
+
 }

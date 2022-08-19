@@ -73,7 +73,6 @@ public class Util1 {
     public static String toDateStr(Date date, String format) {
         SimpleDateFormat formatter = new SimpleDateFormat(format);
         String strDate = null;
-
         try {
             strDate = formatter.format(date);
         } catch (Exception ex) {

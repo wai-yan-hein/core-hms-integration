@@ -39,6 +39,8 @@ public class OPDHis implements java.io.Serializable {
     private Patient patient;
     @Column(name = "patient_name")
     private String patientName;
+    @Column(name = "payment_id")
+    private Integer paymentId;
 
     public OPDHis() {
     }

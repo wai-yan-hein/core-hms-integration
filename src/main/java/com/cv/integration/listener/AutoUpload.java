@@ -8,10 +8,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -43,6 +45,8 @@ public class AutoUpload {
     @Value("${upload.expense}")
     private String uploadExpense;
     @Autowired
+    private final TraderOpeningRepo traderOpeningRepo;
+    @Autowired
     private final InventoryMessageListener listener;
     @Autowired
     private final SaleHisRepo saleHisRepo;
@@ -66,6 +70,14 @@ public class AutoUpload {
     private final PaymentHisRepo paymentHis;
     @Autowired
     private final GenExpenseRepo genExpenseRepo;
+    @Autowired
+    private final OPDCategoryRepo opdGroupRepo;
+    @Autowired
+    private final OTGroupRepo otGroupRepo;
+    @Autowired
+    private final DCGroupRepo dcGroupRepo;
+    @Autowired
+    private Environment environment;
     private boolean syncing = false;
 
     @Scheduled(fixedRate = 10 * 60 * 1000)
@@ -73,7 +85,11 @@ public class AutoUpload {
         if (!syncing) {
             log.info("autoUpload: Start");
             syncing = true;
+            uploadOPDSetup();
+            uploadOTSetup();
+            uploadDCSetup();
             uploadTrader();
+            uploadTraderOpening();
             uploadDoctor();
             uploadSaleVoucher();
             uploadPurchaseVoucher();
@@ -86,6 +102,43 @@ public class AutoUpload {
             uploadExpense();
             syncing = false;
             log.info("autoUpload: End");
+        }
+    }
+
+    private void uploadOPDSetup() {
+        if (Util1.getBoolean(environment.getProperty("upload.opd.setup"))) {
+            List<OPDCategory> categories = opdGroupRepo.unUploadOPDCategory();
+            for (OPDCategory c : categories) {
+                listener.sendOPDGroup(c);
+            }
+        }
+    }
+
+    private void uploadOTSetup() {
+        if (Util1.getBoolean(environment.getProperty("upload.ot.setup"))) {
+            List<OTGroup> otGroups = otGroupRepo.unUploadOTGroup();
+            for (OTGroup g : otGroups) {
+                listener.sendOTGroup(g);
+            }
+        }
+    }
+
+    private void uploadDCSetup() {
+        if (Util1.getBoolean(environment.getProperty("upload.dc.setup"))) {
+            List<DCGroup> dcGroups = dcGroupRepo.unUploadDCGroup();
+            for (DCGroup g : dcGroups) {
+                listener.sendDCGroup(g);
+            }
+        }
+    }
+
+    private void uploadTraderOpening() {
+        List<TraderOpening> listOP = traderOpeningRepo.unUploadVoucher(Util1.toDate(syncDate));
+        if (!listOP.isEmpty()) {
+            log.info(String.format("uploadTraderOpening: %s", listOP.size()));
+            for (TraderOpening op : listOP) {
+                listener.sendTraderOpening(op);
+            }
         }
     }
 
@@ -114,7 +167,10 @@ public class AutoUpload {
             List<SaleHis> vouchers = saleHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadSaleVoucher: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendSaleVoucherToAccount(vou.getVouNo()));
+                for (SaleHis vou : vouchers) {
+                    listener.sendSaleVoucherToAccount(vou.getVouNo());
+                    sleep();
+                }
             }
         }
     }
@@ -124,7 +180,10 @@ public class AutoUpload {
             List<PurHis> vouchers = purHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadPurchaseVoucher: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendPurchaseVoucherToAccount(vou.getVouNo()));
+                for (PurHis vou : vouchers) {
+                    listener.sendPurchaseVoucherToAccount(vou.getVouNo());
+                    sleep();
+                }
             }
         }
     }
@@ -134,7 +193,10 @@ public class AutoUpload {
             List<RetInHis> vouchers = returnInRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnInVoucher: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendReturnInVoucherToAccount(vou.getVouNo()));
+                for (RetInHis vou : vouchers) {
+                    listener.sendReturnInVoucherToAccount(vou.getVouNo());
+                    sleep();
+                }
             }
         }
     }
@@ -144,7 +206,10 @@ public class AutoUpload {
             List<RetOutHis> vouchers = returnOutRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnOutVoucher: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendReturnOutVoucherToAccount(vou.getVouNo()));
+                for (RetOutHis vou : vouchers) {
+                    listener.sendReturnOutVoucherToAccount(vou.getVouNo());
+                    sleep();
+                }
             }
         }
     }
@@ -154,7 +219,10 @@ public class AutoUpload {
             List<OPDHis> vouchers = opdHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDVoucher: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendOPDVoucherToAccount(vou.getVouNo()));
+                for (OPDHis op : vouchers) {
+                    listener.sendOPDVoucherToAccount(op.getVouNo());
+                    sleep();
+                }
             }
         }
     }
@@ -164,7 +232,10 @@ public class AutoUpload {
             List<OTHis> vouchers = otHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOTVoucher: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendOTVoucherToAccount(vou.getVouNo()));
+                for (OTHis ot : vouchers) {
+                    listener.sendOTVoucherToAccount(ot.getVouNo());
+                    sleep();
+                }
             }
         }
     }
@@ -174,7 +245,10 @@ public class AutoUpload {
             List<DCHis> vouchers = dcHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadDCVoucher: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendDCVoucherToAccount(vou.getVouNo()));
+                for (DCHis vou : vouchers) {
+                    listener.sendDCVoucherToAccount(vou.getVouNo());
+                    sleep();
+                }
             }
         }
     }
@@ -183,8 +257,11 @@ public class AutoUpload {
         if (Util1.getBoolean(uploadPayment)) {
             List<PaymentHis> vouchers = paymentHis.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
-                log.info(String.format("uploadPayment: %s", vouchers.size()));
                 vouchers.forEach(vou -> listener.sendPaymentToAcc(vou.getPayId()));
+                for (PaymentHis vou : vouchers) {
+                    listener.sendPaymentToAcc(vou.getPayId());
+                    sleep();
+                }
             }
         }
     }
@@ -193,9 +270,34 @@ public class AutoUpload {
         if (Util1.getBoolean(uploadExpense)) {
             List<GenExpense> vouchers = genExpenseRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
-                log.info(String.format("uploadExpense: %s", vouchers.size()));
-                vouchers.forEach(vou -> listener.sendGeneralExpenseToAcc(vou.getExpOption() + "-" + vou.getVouNo()));
+                vouchers.forEach(vou -> listener.sendGeneralExpenseToAcc(vou.getGenId()));
+                for (GenExpense vou : vouchers) {
+                    listener.sendGeneralExpenseToAcc(vou.getGenId());
+                    sleep();
+                }
             }
+        }
+    }
+
+    private void uploadOPDIncome() {
+        String sql = "select og.dept_code,oc.cat_id, os.service_name, \n" +
+                "sum(ifnull(odh.qty, 0)) ttl_qty,date(oh.opd_date) opd_date, \n" +
+                "odh.price,sum(ifnull(odh.amount,0)) income\n" +
+                "from opd_his oh, opd_details_his odh, opd_service os, opd_category oc,opd_group og\n" +
+                "where oh.opd_inv_id = odh.vou_no\n" +
+                "and odh.service_id = os.service_id and os.cat_id = oc.cat_id\n" +
+                "and oc.group_id = og.group_id\n" +
+                "and oh.deleted = false\n" +
+                "and date(oh.opd_date) between '2022-06-01' and   '2023-06-01'\n" +
+                "group by og.group_id,oc.cat_id, os.service_id,date(oh.opd_date), odh.price\n" +
+                "order by oh.opd_date";
+    }
+
+    private void sleep() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(250);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
         }
     }
 

@@ -24,7 +24,7 @@ public class DCHis implements java.io.Serializable {
     @Column(name = "disc_a")
     private Double vouDiscount;
     @Column(name = "paid")
-    private String vouPaid;
+    private Double vouPaid;
     @Column(name = "deleted")
     private boolean deleted;
     @ManyToOne
@@ -37,4 +37,6 @@ public class DCHis implements java.io.Serializable {
     @ManyToOne()
     @JoinColumn(name = "patient_id")
     private Patient patient;
+    @Column(name = "payment_id")
+    private Integer paymentId;
 }

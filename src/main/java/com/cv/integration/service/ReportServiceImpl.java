@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
@@ -46,12 +47,12 @@ public class ReportServiceImpl implements ReportService {
                 v.setVouDateStr(Util1.toDateStr(rs.getDate("sale_date"), "dd/MM/yyyy hh:mm aa"));
                 v.setTtlAmt(rs.getDouble("vou_total"));
                 v.setCurrency(rs.getString("currency_id"));
-                v.setPatientCode(rs.getString("reg_no"));
-                v.setPatientName(rs.getString("patient_name"));
+                v.setPatientCode(Util1.isNull(rs.getString("reg_no"), "-"));
+                v.setPatientName(Util1.isNull(rs.getString("patient_name"), "-"));
                 v.setAdmissionNo(rs.getString("admission_no"));
                 v.setAmount(rs.getDouble("sale_amount"));
                 v.setPrice(rs.getDouble("sale_price"));
-                v.setQtyStr(rs.getDouble("sale_qty") + rs.getString("item_unit"));
+                v.setQtyStr(rs.getDouble("sale_qty") + " " + rs.getString("item_unit"));
                 v.setStockName(rs.getString("med_name"));
                 v.setLocationName(rs.getString("location_name"));
                 v.setDoctorName(rs.getString("doctor_name"));
@@ -60,7 +61,8 @@ public class ReportServiceImpl implements ReportService {
                 v.setDiscount(rs.getString("item_discount_p"));
                 double focQty = rs.getDouble("foc_qty");
                 v.setFocQty(focQty > 0 ? focQty + rs.getString("foc_unit") : null);
-                v.setExpireDate(Util1.toDateStr(rs.getDate("expire_date"), "dd/MM/yyyy"));
+                Date expDate = rs.getDate("expire_date");
+                v.setExpireDate(expDate == null ? null : Util1.toDateStr(expDate, "dd/MM/yyyy"));
                 v.setRemark(rs.getString("remark"));
                 vouchers.add(v);
             }
@@ -83,17 +85,23 @@ public class ReportServiceImpl implements ReportService {
                 v.setVouBal(rs.getDouble("balance"));
                 v.setDisAmt(rs.getDouble("discount"));
                 v.setPaidAmt(rs.getDouble("paid"));
-                v.setVouDate(rs.getDate("pur_date"));
+                v.setVouDateStr(Util1.toDateStr(rs.getDate("pur_date"), "dd/MM/yyyy hh:mm aa"));
                 v.setTtlAmt(rs.getDouble("vou_total"));
                 v.setCurrency(rs.getString("currency"));
                 v.setTraderCode(rs.getString("cus_id"));
                 v.setTraderName(rs.getString("trader_name"));
                 v.setAmount(rs.getDouble("pur_amount"));
                 v.setPrice(rs.getDouble("pur_price"));
-                v.setQtyStr(rs.getDouble("pur_qty") + rs.getString("pur_unit"));
+                v.setQtyStr(rs.getDouble("pur_qty") + " " + rs.getString("pur_unit"));
                 v.setStockName(rs.getString("med_name"));
                 v.setLocationName(rs.getString("location_name"));
                 v.setCreatedBy(rs.getString("user_name"));
+                v.setRemark(rs.getString("remark"));
+                v.setReference(rs.getString("ref_no"));
+                double focQty = rs.getDouble("pur_foc_qty");
+                v.setFocQty(focQty > 0 ? focQty + rs.getString("foc_unit") : null);
+                Date expDate = rs.getDate("expire_date");
+                v.setExpireDate(expDate == null ? null : Util1.toDateStr(expDate, "dd/MM/yyyy"));
                 vouchers.add(v);
             }
         }
@@ -115,7 +123,7 @@ public class ReportServiceImpl implements ReportService {
                 v.setVouNo(rs.getString("ret_in_id"));
                 v.setVouBal(rs.getDouble("balance"));
                 v.setPaidAmt(rs.getDouble("paid"));
-                v.setVouDate(rs.getDate("ret_in_date"));
+                v.setVouDateStr(Util1.toDateStr(rs.getDate("ret_in_date"), "dd/MM/yyyy hh:mm aa"));
                 v.setTtlAmt(rs.getDouble("vou_total"));
                 v.setCurrency(rs.getString("currency"));
                 v.setPatientCode(rs.getString("reg_no"));
@@ -177,7 +185,7 @@ public class ReportServiceImpl implements ReportService {
                 v.setVouNo(rs.getString("opd_inv_id"));
                 v.setVouBal(rs.getDouble("vou_balance"));
                 v.setPaidAmt(rs.getDouble("paid"));
-                v.setVouDate(rs.getDate("opd_date"));
+                v.setVouDateStr(Util1.toDateStr(rs.getDate("opd_date"), "dd/MM/yyyy hh:mm aa"));
                 v.setTtlAmt(rs.getDouble("vou_total"));
                 v.setDisAmt(rs.getDouble("disc_a"));
                 v.setCurrency(rs.getString("currency_id"));
@@ -209,7 +217,7 @@ public class ReportServiceImpl implements ReportService {
                 v.setVouNo(rs.getString("ot_inv_id"));
                 v.setVouBal(rs.getDouble("vou_balance"));
                 v.setPaidAmt(rs.getDouble("paid"));
-                v.setVouDate(rs.getDate("ot_date"));
+                v.setVouDateStr(Util1.toDateStr(rs.getDate("ot_date"), "dd/MM/yyyy hh:mm aa"));
                 v.setTtlAmt(rs.getDouble("vou_total"));
                 v.setDisAmt(rs.getDouble("disc_a"));
                 v.setCurrency(rs.getString("currency_id"));
@@ -241,7 +249,7 @@ public class ReportServiceImpl implements ReportService {
                 v.setVouNo(rs.getString("dc_inv_id"));
                 v.setVouBal(rs.getDouble("vou_balance"));
                 v.setPaidAmt(rs.getDouble("paid"));
-                v.setVouDate(rs.getDate("dc_date"));
+                v.setVouDateStr(Util1.toDateStr(rs.getDate("dc_date"), "dd/MM/yyyy hh:mm aa"));
                 v.setTtlAmt(rs.getDouble("vou_total"));
                 v.setDisAmt(rs.getDouble("disc_a"));
                 v.setCurrency(rs.getString("currency_id"));

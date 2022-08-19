@@ -37,6 +37,7 @@ public class Gl implements java.io.Serializable {
     private String coaParent;
     private String migId;
     private String migName;
+    private String traderGroup;
 
     public Gl() {
     }

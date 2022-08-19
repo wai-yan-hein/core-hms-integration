@@ -36,6 +36,9 @@ public class PaymentHis implements java.io.Serializable {
     @ManyToOne
     @JoinColumn(name = "pay_id")
     private PaymentType paymentType;
+    @ManyToOne
+    @JoinColumn(name = "location_id")
+    private Location location;
 
     public PaymentHis() {
     }
