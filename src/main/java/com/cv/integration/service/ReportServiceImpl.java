@@ -2,6 +2,9 @@ package com.cv.integration.service;
 
 import com.cv.integration.common.Util1;
 import com.cv.integration.common.Voucher;
+import com.cv.integration.mongo.model.Doctor;
+import com.cv.integration.mongo.model.PatientInfo;
+import com.cv.integration.mongo.model.Region;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.SessionFactory;
 import org.hibernate.jdbc.Work;
@@ -267,6 +270,137 @@ public class ReportServiceImpl implements ReportService {
         }
         return vouchers;
     }
+
+    @Override
+    public List<PatientInfo> getPatient() throws SQLException {
+        List<PatientInfo> infos = new ArrayList<>();
+        String sql = "select p.*,c.city_name,d.doctor_name from patient_detail p left join city c on p.city_id = c.city_id\n" +
+                "left join doctor d on p.doctor_id = d.doctor_id";
+        ResultSet rs = exeSql(sql);
+        //reg_no, reg_date, dob, sex, father_name, nirc, city_id, nationality, religion, doctor_id,
+        // patient_name, address, contactno, created_by, age, admission_no, township_id,
+        // pt_type, ot_id, age_str, month, day, regno_h2
+        if (rs != null) {
+            while (rs.next()) {
+                PatientInfo info = new PatientInfo();
+                info.setPatientNo(rs.getString("reg_no"));
+                info.setRegDate(rs.getTimestamp("reg_date"));
+                info.setDob(rs.getDate("dob"));
+                info.setGender(rs.getString("sex"));
+                info.setFatherName(rs.getString("father_name"));
+                info.setNrc(rs.getString("nirc"));
+                info.setRegion(new Region(rs.getString("city_name")));
+                info.setDoctor(new Doctor(rs.getString("doctor_name")));
+                info.setPatientName(rs.getString("patient_name"));
+                info.setAddress(rs.getString("address"));
+                info.setPhoneNo(rs.getString("contactno"));
+                info.setAge(rs.getInt("age"));
+                info.setMonth(rs.getInt("month"));
+                info.setDay(rs.getInt("day"));
+                info.setAdmNo(rs.getString("admission_no"));
+                infos.add(info);
+            }
+        }
+        return infos;
+    }
+
+    @Override
+    public boolean isAdmission(String date, String regNo, Integer payId) {
+        boolean admission = false;
+        String sql = "\n" +
+                "select reg_no,admission_no,currency_id,round(sum(amt) ,0)amt\n" +
+                "from (\n" +
+                "select reg_no,admission_no, currency_id,sum(balance) amt\n" +
+                "from sale_his \n" +
+                "where deleted = 0 \n" +
+                "#and date(sale_date)<= '" + date + "' \n" +
+                "and balance <>0\n" +
+                "and reg_no ='" + regNo + "'\n" +
+                "group by reg_no,admission_no,currency_id\n" +
+                "\tunion all\n" +
+                "select reg_no,admission_no, currency,sum(balance)*-1 amt\n" +
+                "from ret_in_his \n" +
+                "where deleted = 0 \n" +
+                "and date(ret_in_date)<='" + date + "' \n" +
+                "and balance <>0\n" +
+                "and reg_no ='" + regNo + "'\n" +
+                "group by reg_no,admission_no, currency\n" +
+                "\tunion all\n" +
+                "select patient_id,admission_no, currency_id,sum(vou_balance) amt\n" +
+                "from opd_his \n" +
+                "where deleted = 0 \n" +
+                "and date(opd_date)<='" + date + "' \n" +
+                "and vou_balance <>0\n" +
+                "and patient_id ='" + regNo + "'\n" +
+                "group by patient_id,admission_no,currency_id\n" +
+                "\tunion all\n" +
+                "select patient_id,admission_no, currency_id,sum(vou_total) amt\n" +
+                "from ot_his \n" +
+                "where deleted = 0 \n" +
+                "and date(ot_date)<='" + date + "' \n" +
+                "and patient_id ='" + regNo + "'\n" +
+                "group by patient_id,admission_no,currency_id\n" +
+                "\tunion all\n" +
+                "select patient_id,admission_no, currency_id,sum(paid)*-1 amt\n" +
+                "from ot_his \n" +
+                "where deleted = 0 \n" +
+                "and date(ot_date)<='" + date + "' \n" +
+                "and patient_id ='" + regNo + "'\n" +
+                "group by patient_id,admission_no,currency_id\n" +
+                "\tunion all\n" +
+                "select patient_id,admission_no, currency_id,sum(disc_a)*-1 amt\n" +
+                "from ot_his \n" +
+                "where deleted = 0 \n" +
+                "and date(ot_date)<='" + date + "' \n" +
+                "and patient_id ='" + regNo + "'\n" +
+                "group by patient_id,admission_no,currency_id\n" +
+                "\tunion all\n" +
+                "select patient_id,admission_no, currency_id,sum(vou_total) amt\n" +
+                "from dc_his \n" +
+                "where deleted = 0 \n" +
+                "and date(dc_date)<='" + date + "' \n" +
+                "and patient_id ='" + regNo + "'\n" +
+                "group by patient_id,admission_no,currency_id\n" +
+                "\tunion all\n" +
+                "select patient_id,admission_no, currency_id,sum(disc_a)*-1 amt\n" +
+                "from dc_his \n" +
+                "where deleted = 0 \n" +
+                "and date(dc_date)<='" + date + "' \n" +
+                "and patient_id ='" + regNo + "'\n" +
+                "group by patient_id,admission_no,currency_id\n" +
+                "\tunion all \n" +
+                "select patient_id,admission_no, currency_id,sum(paid)*-1 amt\n" +
+                "from dc_his \n" +
+                "where deleted = 0 \n" +
+                "and date(dc_date)<='" + date + "' \n" +
+                "and patient_id ='" + regNo + "'\n" +
+                "group by patient_id,admission_no,currency_id\n" +
+                "\tunion all\n" +
+                "select reg_no,admission_no, currency_id,sum(pay_amt)*-1 amt\n" +
+                "from opd_patient_bill_payment \n" +
+                "where  date(pay_date)<='" + date + "' \n" +
+                "and reg_no ='" + regNo + "' and id <> " + payId + "\n" +
+                "and deleted = 0\n" +
+                "group by reg_no,admission_no,currency_id\n" +
+                ")a\n" +
+                "where amt <> 0\n" +
+                "group by reg_no,currency_id\n";
+        ResultSet rs = exeSql(sql);
+        try {
+            while (rs.next()) {
+                String amsNo = rs.getString("admission_no");
+                double amt = rs.getDouble("amt");
+                if (!Util1.isNullOrEmpty(amsNo) && amt > 0) {
+                    admission = true;
+                }
+            }
+        } catch (SQLException e) {
+            log.error(e.getMessage());
+        }
+
+        return admission;
+    }
+
 
     public ResultSet exeSql(final String sql) {
         Work work = (Connection con) -> {

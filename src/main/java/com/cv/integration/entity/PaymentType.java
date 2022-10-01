@@ -16,6 +16,4 @@ public class PaymentType implements java.io.Serializable {
     private String payId;
     @Column(name = "desp")
     private String desp;
-    @Column(name = "acc_id")
-    private String account;
 }

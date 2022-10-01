@@ -17,8 +17,11 @@ public class OPDReceive implements java.io.Serializable {
     @ManyToOne
     @JoinColumn(name = "reg_no")
     private Patient patient;
-    @Column(name = "currency_id")
-    private String curCode;
+    @Column(name = "admission_no")
+    private String amsNo;
+    @ManyToOne
+    @JoinColumn(name = "currency_id")
+    private Currency currency;
     @Column(name = "pay_date")
     @Temporal(TemporalType.DATE)
     private Date payDate;
@@ -28,6 +31,8 @@ public class OPDReceive implements java.io.Serializable {
     private String remark;
     @Column(name = "intg_upd_status")
     private String intgUpdStatus;
+    @Column(name = "deleted")
+    private boolean deleted;
 
     public OPDReceive() {
     }

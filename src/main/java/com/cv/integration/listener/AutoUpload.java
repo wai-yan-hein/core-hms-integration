@@ -44,6 +44,8 @@ public class AutoUpload {
     private String uploadPayment;
     @Value("${upload.expense}")
     private String uploadExpense;
+    @Value("${upload.bill}")
+    private String uploadOPDBill;
     @Autowired
     private final TraderOpeningRepo traderOpeningRepo;
     @Autowired
@@ -70,6 +72,8 @@ public class AutoUpload {
     private final PaymentHisRepo paymentHis;
     @Autowired
     private final GenExpenseRepo genExpenseRepo;
+    @Autowired
+    private final OPDReceiveRepo opdReceiveRepo;
     @Autowired
     private final OPDCategoryRepo opdGroupRepo;
     @Autowired
@@ -100,6 +104,7 @@ public class AutoUpload {
             uploadOTVoucher();
             uploadDCVoucher();
             uploadExpense();
+            uploadOPDReceive();
             syncing = false;
             log.info("autoUpload: End");
         }
@@ -279,18 +284,17 @@ public class AutoUpload {
         }
     }
 
-    private void uploadOPDIncome() {
-        String sql = "select og.dept_code,oc.cat_id, os.service_name, \n" +
-                "sum(ifnull(odh.qty, 0)) ttl_qty,date(oh.opd_date) opd_date, \n" +
-                "odh.price,sum(ifnull(odh.amount,0)) income\n" +
-                "from opd_his oh, opd_details_his odh, opd_service os, opd_category oc,opd_group og\n" +
-                "where oh.opd_inv_id = odh.vou_no\n" +
-                "and odh.service_id = os.service_id and os.cat_id = oc.cat_id\n" +
-                "and oc.group_id = og.group_id\n" +
-                "and oh.deleted = false\n" +
-                "and date(oh.opd_date) between '2022-06-01' and   '2023-06-01'\n" +
-                "group by og.group_id,oc.cat_id, os.service_id,date(oh.opd_date), odh.price\n" +
-                "order by oh.opd_date";
+    private void uploadOPDReceive() {
+        if (Util1.getBoolean(uploadOPDBill)) {
+            List<OPDReceive> vouchers = opdReceiveRepo.unUploadVoucher(Util1.toDate(syncDate));
+            if (!vouchers.isEmpty()) {
+                log.info(String.format("uploadOPDReceive: %s", vouchers.size()));
+            }
+            vouchers.forEach(opd -> {
+                listener.sendOPDReceiveToAccount(opd.getBillId());
+                sleep();
+            });
+        }
     }
 
     private void sleep() {

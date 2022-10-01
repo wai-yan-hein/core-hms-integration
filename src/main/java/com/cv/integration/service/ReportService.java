@@ -1,6 +1,7 @@
 package com.cv.integration.service;
 
 import com.cv.integration.common.Voucher;
+import com.cv.integration.mongo.model.PatientInfo;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -19,6 +20,10 @@ public interface ReportService {
     List<Voucher> getOTVoucher(String vouNo) throws SQLException;
 
     List<Voucher> getDCVoucher(String vouNo) throws SQLException;
+
+    List<PatientInfo> getPatient() throws SQLException;
+
+    boolean isAdmission(String date, String regNo,Integer payId);
 
 
 }

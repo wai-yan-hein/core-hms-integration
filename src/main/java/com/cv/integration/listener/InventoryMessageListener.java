@@ -7,6 +7,7 @@ import com.cv.integration.model.COAOpening;
 import com.cv.integration.model.ChartOfAccount;
 import com.cv.integration.model.Gl;
 import com.cv.integration.repo.*;
+import com.cv.integration.service.ReportService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import lombok.RequiredArgsConstructor;
@@ -87,6 +88,8 @@ public class InventoryMessageListener {
     @Autowired
     private DCGroupRepo dcGroupRepo;
     @Autowired
+    private ReportService reportService;
+    @Autowired
     private final Map<String, AccountSetting> hmAccSetting;
     @Autowired
     private final String dcDepositId;
@@ -126,6 +129,8 @@ public class InventoryMessageListener {
     private String uploadPayment;
     @Value("${upload.expense}")
     private String uploadExpense;
+    @Value("${upload.bill}")
+    private String uploadOPDBill;
     @Value("${account.compcode}")
     private String compCode;
     @Value("${account.department}")
@@ -415,15 +420,16 @@ public class InventoryMessageListener {
                         if (vouDisAmt > 0) {
                             Gl gl = new Gl();
                             if (vouPaidAmt > 0) {
-                                gl.setAccCode(payAcc);
+                                gl.setSrcAccCode(payAcc);
+                                gl.setCash(true);
                             } else {
-                                gl.setAccCode(balAcc);
+                                gl.setSrcAccCode(balAcc);
                                 gl.setTraderCode(traderCode);
                             }
                             gl.setGlDate(vouDate);
                             gl.setDescription("Sale Voucher Discount");
-                            gl.setSrcAccCode(disAcc);
-                            gl.setDrAmt(vouDisAmt);
+                            gl.setAccCode(disAcc);
+                            gl.setCrAmt(vouDisAmt);
                             gl.setCurCode(curCode);
                             gl.setReference(reference);
                             gl.setDeptCode(deptCode);
@@ -444,7 +450,7 @@ public class InventoryMessageListener {
                             gl.setDescription("Sale Voucher Paid");
                             gl.setSrcAccCode(payAcc);
                             gl.setAccCode(srcAcc);
-                            gl.setDrAmt(vouPaidAmt);
+                            gl.setDrAmt(vouTotalAmt);
                             gl.setCurCode(curCode);
                             gl.setReference(reference);
                             gl.setDeptCode(deptCode);
@@ -540,15 +546,15 @@ public class InventoryMessageListener {
                     if (vouDisAmt > 0) {
                         Gl gl = new Gl();
                         if (vouPaidAmt > 0) {
-                            gl.setAccCode(payAcc);
+                            gl.setSrcAccCode(payAcc);
                         } else {
-                            gl.setAccCode(balAcc);
+                            gl.setSrcAccCode(balAcc);
                             gl.setTraderCode(traderCode);
                         }
                         gl.setGlDate(vouDate);
                         gl.setDescription("Purchase Voucher Discount");
-                        gl.setSrcAccCode(disAcc);
-                        gl.setCrAmt(vouDisAmt);
+                        gl.setAccCode(disAcc);
+                        gl.setDrAmt(vouDisAmt);
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
@@ -1175,7 +1181,7 @@ public class InventoryMessageListener {
                                     gl.setTraderCode(traderCode);
                                 }
                                 gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(Util1.isNull(opdAcc, disAcc));
+                                gl.setAccCode(Util1.isNull(opdAcc, disAcc));
                                 gl.setCrAmt(amount);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1697,55 +1703,85 @@ public class InventoryMessageListener {
         log.info(String.format("updateDC: %s", vouNo));
     }
 
-    private void sendOPDReceiveToAccount(Integer id) {
-        String tranSource = "OPD_RECEIVE";
-        AccountSetting as = hmAccSetting.get(tranSource);
-        if (!Objects.isNull(as)) {
+    public void sendOPDReceiveToAccount(Integer id) {
+        if (Util1.getBoolean(uploadOPDBill)) {
             Optional<OPDReceive> opdReceive = opdReceiveRepo.findById(id);
             if (opdReceive.isPresent()) {
                 OPDReceive receive = opdReceive.get();
-                String payAcc = as.getPayAcc();
-                String balAcc = as.getBalanceAcc();
-                String mainDept = as.getDeptCode();
-                String patientType = "Outpatient";
                 Date payDate = receive.getPayDate();
                 double payAmt = Util1.getDouble(receive.getPayAmt());
-                String curCode = receive.getCurCode();
-                String reference;
+                String regNo = receive.getPatient().getPatientNo();
+                String curCode = receive.getCurrency().getAccCurCode();
+                boolean deleted = receive.isDeleted();
+                String tranSource;
+                String deptCode;
+                String cashAcc;
+                String balAcc;
+                String traderCode;
+                String description;
+                if (reportService.isAdmission(Util1.toDateStr(payDate, "yyyy-MM-dd"), regNo, id)) {
+                    tranSource = "DC";
+                    AccountSetting ac = hmAccSetting.get(tranSource);
+                    deptCode = ac.getDeptCode();
+                    cashAcc = ac.getPayAcc();
+                    balAcc = ac.getBalanceAcc();
+                    traderCode = inPatientCode;
+                    description = "Inpatient Bill";
+
+                } else {
+                    tranSource = "OPD";
+                    AccountSetting ac = hmAccSetting.get(tranSource);
+                    deptCode = ac.getDeptCode();
+                    cashAcc = ac.getPayAcc();
+                    balAcc = ac.getBalanceAcc();
+                    traderCode = outPatientCode;
+                    description = "Outpatient Bill";
+                }
+                String reference = null;
                 if (!Objects.isNull(receive.getPatient())) {
                     String patientNo = receive.getPatient().getPatientNo();
                     String patientName = receive.getPatient().getPatientName();
-                    reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
-                } else {
-                    reference = String.format("%s : %s : (%s)", "-", "-", patientType);
+                    reference = String.format("%s : %s", patientNo, patientName);
                 }
-                if (payAmt > 0) {
+                if (payAmt != 0) {
+                    List<Gl> list = new ArrayList<>();
                     Gl gl = new Gl();
                     gl.setGlDate(payDate);
-                    gl.setSrcAccCode(payAcc);
+                    if (payAmt > 0) {
+                        gl.setDrAmt(payAmt);
+                        gl.setDescription(String.format("%s %s", description, "Received"));
+                    } else {
+                        gl.setCrAmt(payAmt * -1);
+                        gl.setDescription(String.format("%s %s", description, "Refund"));
+                    }
+                    gl.setSrcAccCode(cashAcc);
                     gl.setAccCode(balAcc);
-                    gl.setDrAmt(payAmt);
                     gl.setRefNo(String.valueOf(id));
-                    gl.setDeptCode(mainDept);
+                    gl.setDeptCode(deptCode);
                     gl.setCompCode(compCode);
                     gl.setMacId(MAC_ID);
                     gl.setCreatedBy(APP_NAME);
                     gl.setCurCode(curCode);
-                    gl.setDescription("OPD Bill Receive");
+                    gl.setDescription(description);
                     gl.setCreatedDate(Util1.getTodayDate());
                     gl.setTranSource(tranSource);
                     gl.setReference(reference);
-                    gl.setTraderCode(outPatientCode);
-                    gl.setDeleted(false);
-                    //sendMessage("GL", tranSource, gson.toJson(gl));
+                    gl.setTraderCode(traderCode);
+                    gl.setDeleted(deleted);
+                    gl.setCash(true);
+                    list.add(gl);
+                    sendMessage("GL_LIST", "OPD_RECEIVE", gson.toJson(list));
+                    log.info(String.format("sendOPDReceiveToAccount: %s", id));
                 }
             }
+
         }
     }
 
+
     private void updateOPDReceive(Integer id) {
         opdReceiveRepo.updateOPD(id, ACK);
-        log.info(String.format("updateOPDReceive %s", id));
+        log.info(String.format("updateOPDReceive: %s", id));
     }
 
     public void sendGeneralExpenseToAcc(Integer vouNo) {
@@ -1818,7 +1854,7 @@ public class InventoryMessageListener {
                         cusDisAcc = saleSetting.get().getDiscountAcc();
                     }
                     PaymentHis pay = payment.get();
-                    String payAcc = pay.getPaymentType() == null ? as.getPayAcc() : pay.getPaymentType().getAccount();
+                    String payAcc = pay.getPaymentType() == null ? as.getPayAcc() : pay.getPaymentType().getPayId();
                     String payAccOut = as.getPayAccOut();
                     String mainDept = as.getDeptCode();
                     if (pay.getLocation() != null) {
