@@ -2,10 +2,7 @@ package com.cv.integration.listener;
 
 import com.cv.integration.common.Util1;
 import com.cv.integration.entity.*;
-import com.cv.integration.model.AccTrader;
-import com.cv.integration.model.COAOpening;
-import com.cv.integration.model.ChartOfAccount;
-import com.cv.integration.model.Gl;
+import com.cv.integration.model.*;
 import com.cv.integration.repo.*;
 import com.cv.integration.service.ReportService;
 import com.google.gson.Gson;
@@ -15,10 +12,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.env.Environment;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessageCreator;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import javax.jms.JMSException;
 import javax.jms.MapMessage;
@@ -33,10 +34,7 @@ import java.util.*;
 public class InventoryMessageListener {
     private static final String LISTEN_QUEUE = "INVENTORY";
     private static final String ACC_QUEUE = "ACCOUNT_QUEUE";
-    private final Gson gson = new GsonBuilder()
-            .serializeNulls()
-            .setDateFormat(DateFormat.FULL, DateFormat.FULL)
-            .create();
+    private final Gson gson = new GsonBuilder().serializeNulls().setDateFormat(DateFormat.FULL, DateFormat.FULL).create();
     @Autowired
     private final AccountSettingRepo accountSetting;
     @Autowired
@@ -143,12 +141,57 @@ public class InventoryMessageListener {
     private String appType;
     @Value("${upload.doctor}")
     private String uploadDoctor;
+    @Autowired
+    private Environment environment;
     private final String ACK = "ACK";
     private final String APP_NAME = "CM";
     private final Integer MAC_ID = 99;
     private final String FOC = "FOC";
     private final String ERR = "ERR";
     private String traderAcc = null;
+    private WebClient accountApi;
+
+    private void sendAccount(List<Gl> glList) {
+        if (!glList.isEmpty()) {
+            initWebClient();
+            Mono<Response> result = accountApi.post().uri("/account/save-gl-list").body(Mono.just(glList), List.class).retrieve().bodyToMono(Response.class);
+            result.subscribe(response -> {
+                if (response != null) {
+                    String code = response.getVouNo();
+                    String tranSource = response.getTranSource();
+                    switch (tranSource) {
+                        case "ACK_TRADER" -> updateTrader(code);
+                        case "ACK_SALE" -> updateSale(code);
+                        case "ACK_PURCHASE" -> updatePurchase(code);
+                        case "ACK_RETURN_IN" -> updateReturnIn(code);
+                        case "ACK_RETURN_OUT" -> updateReturnOut(code);
+                        case "ACK_OPD" -> updateOPD(code);
+                        case "ACK_OT" -> updateOT(code);
+                        case "ACK_DC" -> updateDC(code);
+                        case "ACK_OPD_RECEIVE" -> updateOPDReceive(Integer.parseInt(code));
+                        case "ACK_EXPENSE" -> updateExpense(Integer.parseInt(code));
+                        case "ACK_PAYMENT" -> updatePayment(Integer.parseInt(code));
+                        case "ACK_OPENING" -> updateOpening(code);
+                        case "ACK_COA_OPD" -> updateOPDCOA(code);
+                        case "ACK_COA_OT" -> updateOTCOA(code);
+                        case "ACK_COA_DC" -> updateDCCOA(code);
+                    }
+                }
+            }, (e) -> {
+                log.info(e.getMessage());
+            });
+        }
+    }
+
+    private void initWebClient() {
+        if (accountApi == null) {
+            String url = environment.getProperty("account.url");
+            log.info("account : " + url);
+            if (url != null) {
+                accountApi = WebClient.builder().exchangeStrategies(ExchangeStrategies.builder().codecs(config -> config.defaultCodecs().maxInMemorySize(16 * 1024 * 1024)).build()).baseUrl(url).build();
+            }
+        }
+    }
 
     private void sendMessage(String entity, String option, String data) {
         MessageCreator mc = (Session session) -> {
@@ -174,6 +217,7 @@ public class InventoryMessageListener {
         };
         jmsTemplate.send(ACC_QUEUE, mc);
     }
+
     @JmsListener(destination = LISTEN_QUEUE)
     public void receivedMessage(final MapMessage message) throws JMSException {
         String entity = Util1.isNull(message.getString("entity"), message.getString("ENTITY"));
@@ -543,31 +587,7 @@ public class InventoryMessageListener {
                         listGl.add(gl);
                     }
                     //discount
-                    if (vouDisAmt > 0) {
-                        Gl gl = new Gl();
-                        if (vouPaidAmt > 0) {
-                            gl.setSrcAccCode(payAcc);
-                        } else {
-                            gl.setSrcAccCode(balAcc);
-                            gl.setTraderCode(traderCode);
-                        }
-                        gl.setGlDate(vouDate);
-                        gl.setDescription("Purchase Voucher Discount");
-                        gl.setAccCode(disAcc);
-                        gl.setDrAmt(vouDisAmt);
-                        gl.setCurCode(curCode);
-                        gl.setReference(reference);
-                        gl.setDeptCode(deptCode);
-                        gl.setCompCode(compCode);
-                        gl.setCreatedDate(Util1.getTodayDate());
-                        gl.setCreatedBy(APP_NAME);
-                        gl.setTranSource(tranSource);
-                        gl.setRefNo(vouNo);
-                        gl.setDeleted(deleted);
-                        gl.setMacId(MAC_ID);
-                        gl.setTraderGroup(traderGroup);
-                        listGl.add(gl);
-                    }
+
                     //payment
                     if (vouPaidAmt > 0) {
                         Gl gl = new Gl();
@@ -861,21 +881,11 @@ public class InventoryMessageListener {
                             //amount
                             double qty = Util1.getDouble(op.getQty());
                             double amount = Util1.getDouble(op.getAmount());
-                            double moFeeAmt = percent ?
-                                    qty * amount * Util1.getDouble(op.getMoFeeAmt()) / 100
-                                    : Util1.getDouble(op.getMoFeeAmt()) * qty;
-                            double staffAmt = percent ?
-                                    qty * amount * Util1.getDouble(op.getStaffFeeAmt()) / 100 :
-                                    Util1.getDouble(op.getStaffFeeAmt()) * qty;
-                            double techAmt = percent ?
-                                    qty * amount * Util1.getDouble(op.getTechFeeAmt()) / 100 :
-                                    Util1.getDouble(op.getTechFeeAmt()) * qty;
-                            double referAmt = percent ?
-                                    qty * amount * Util1.getDouble(op.getReferFeeAmt()) / 100 :
-                                    Util1.getDouble(op.getReferFeeAmt()) * qty;
-                            double readerAmt = percent ?
-                                    qty * amount * Util1.getDouble(op.getReadFeeAmt()) / 100 :
-                                    Util1.getDouble(op.getReadFeeAmt()) * qty;
+                            double moFeeAmt = percent ? qty * amount * Util1.getDouble(op.getMoFeeAmt()) / 100 : Util1.getDouble(op.getMoFeeAmt()) * qty;
+                            double staffAmt = percent ? qty * amount * Util1.getDouble(op.getStaffFeeAmt()) / 100 : Util1.getDouble(op.getStaffFeeAmt()) * qty;
+                            double techAmt = percent ? qty * amount * Util1.getDouble(op.getTechFeeAmt()) / 100 : Util1.getDouble(op.getTechFeeAmt()) * qty;
+                            double referAmt = percent ? qty * amount * Util1.getDouble(op.getReferFeeAmt()) / 100 : Util1.getDouble(op.getReferFeeAmt()) * qty;
+                            double readerAmt = percent ? qty * amount * Util1.getDouble(op.getReadFeeAmt()) / 100 : Util1.getDouble(op.getReadFeeAmt()) * qty;
                             //income
                             String tmp = admission ? Util1.isNull(ipdAcc, opdAcc) : opdAcc;
                             srcAcc = Util1.isNull(tmp, srcAcc);
@@ -913,7 +923,7 @@ public class InventoryMessageListener {
                                 gl.setDeleted(deleted);
                                 listGl.add(gl);
                                 //payable
-                                if (!Util1.isNullOrEmpty(payableAcc)) {
+                                if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
                                     String[] accounts = payableAcc.split(",");
                                     gl = new Gl();
                                     gl.setGlDate(vouDate);
@@ -938,7 +948,7 @@ public class InventoryMessageListener {
                                 deleteGl(tranSource, vouNo, srcAcc);
                             }
                             //mo payable
-                            if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc)) {
+                            if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc) && amount > 0) {
                                 String[] accounts = moAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -961,7 +971,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //staff payable
-                            if (staffAmt > 0 && !Util1.isNullOrEmpty(staffAcc)) {
+                            if (staffAmt > 0 && !Util1.isNullOrEmpty(staffAcc) && amount > 0) {
                                 String[] accounts = staffAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -984,7 +994,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //tech payable
-                            if (techAmt > 0 && !Util1.isNullOrEmpty(techAcc)) {
+                            if (techAmt > 0 && !Util1.isNullOrEmpty(techAcc) && amount > 0) {
                                 String[] accounts = techAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1007,7 +1017,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //refer payable
-                            if (referAmt > 0 && !Util1.isNullOrEmpty(referAcc)) {
+                            if (referAmt > 0 && !Util1.isNullOrEmpty(referAcc) && amount > 0) {
                                 String[] accounts = referAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1030,7 +1040,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //refer payable
-                            if (readerAmt > 0 && !Util1.isNullOrEmpty(readerAcc)) {
+                            if (readerAmt > 0 && !Util1.isNullOrEmpty(readerAcc) && amount > 0) {
                                 String[] accounts = readerAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1281,7 +1291,7 @@ public class InventoryMessageListener {
                                     gl.setDeleted(deleted);
                                     listGl.add(gl);
                                     //payable
-                                    if (!Util1.isNullOrEmpty(payableAcc)) {
+                                    if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
                                         String[] accounts = payableAcc.split(",");
                                         gl = new Gl();
                                         gl.setGlDate(vouDate);
@@ -1307,7 +1317,7 @@ public class InventoryMessageListener {
                                 }
                             }
                             //mo payable
-                            if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc)) {
+                            if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc) && amount > 0) {
                                 String[] accounts = moAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1329,7 +1339,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //staff payable
-                            if (staffAmt > 0 && !Util1.isNullOrEmpty(staffAcc)) {
+                            if (staffAmt > 0 && !Util1.isNullOrEmpty(staffAcc) && amount > 0) {
                                 String[] accounts = staffAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1351,7 +1361,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //nurse payable
-                            if (nurseAmt > 0 && !Util1.isNullOrEmpty(nurseAcc)) {
+                            if (nurseAmt > 0 && !Util1.isNullOrEmpty(nurseAcc) && amount > 0) {
                                 String[] accounts = nurseAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1383,12 +1393,12 @@ public class InventoryMessageListener {
                     } else {
                         otHisRepo.updateOT(vouNo, ERR);
                     }
-                    }
-                } else {
-                    log.error(String.format("%s Setting not assigned", tranSource));
                 }
+            } else {
+                log.error(String.format("%s Setting not assigned", tranSource));
             }
         }
+    }
 
 
     private void updateOT(String vouNo) {
@@ -1589,7 +1599,7 @@ public class InventoryMessageListener {
                                     gl.setDeleted(deleted);
                                     listGl.add(gl);
                                     //payable
-                                    if (!Util1.isNullOrEmpty(payableAcc)) {
+                                    if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
                                         String[] accounts = payableAcc.split(",");
                                         gl = new Gl();
                                         gl.setGlDate(vouDate);
@@ -1615,7 +1625,7 @@ public class InventoryMessageListener {
                                 }
                             }
                             //mo payable
-                            if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc)) {
+                            if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc) && amount > 0) {
                                 String[] accounts = moAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1637,7 +1647,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //tech payable
-                            if (techAmt > 0 && !Util1.isNullOrEmpty(techAcc)) {
+                            if (techAmt > 0 && !Util1.isNullOrEmpty(techAcc) && amount > 0) {
                                 String[] accounts = techAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
@@ -1659,7 +1669,7 @@ public class InventoryMessageListener {
                                 listGl.add(gl);
                             }
                             //nurse payable
-                            if (nurseAmt > 0 && !Util1.isNullOrEmpty(nurseAcc)) {
+                            if (nurseAmt > 0 && !Util1.isNullOrEmpty(nurseAcc) && amount > 0) {
                                 String[] accounts = nurseAcc.split(",");
                                 Gl gl = new Gl();
                                 gl.setGlDate(vouDate);
