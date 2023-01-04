@@ -1965,12 +1965,14 @@ public class InventoryMessageListener {
             String coaParent = opd.getGroup().getAccount();
             if (coaParent != null) {
                 ChartOfAccount coa = new ChartOfAccount();
-                coa.setCoaCode(opd.getOpdAcc());
+                COAKey key = new COAKey();
+                key.setCoaCode(opd.getOpdAcc());
+                key.setCompCode(compCode);
+                coa.setKey(key);
                 coa.setCoaLevel(3);
                 coa.setCoaParent(coaParent);
                 coa.setCoaNameEng(opd.getCatName());
                 coa.setActive(true);
-                coa.setCompCode(compCode);
                 coa.setCreatedBy(APP_NAME);
                 coa.setCreatedDate(Util1.getTodayDate());
                 coa.setMacId(MAC_ID);
@@ -2004,12 +2006,14 @@ public class InventoryMessageListener {
             if (coaParent != null) {
                 if (isValidOTGroup(groupId)) {
                     ChartOfAccount coa = new ChartOfAccount();
-                    coa.setCoaCode(ot.getIpdAcc());
+                    COAKey key = new COAKey();
+                    key.setCoaCode(ot.getIpdAcc());
+                    key.setCompCode(compCode);
+                    coa.setKey(key);
                     coa.setCoaLevel(3);
                     coa.setCoaParent(coaParent);
                     coa.setCoaNameEng(ot.getGroupName());
                     coa.setActive(true);
-                    coa.setCompCode(compCode);
                     coa.setCreatedBy(APP_NAME);
                     coa.setCreatedDate(Util1.getTodayDate());
                     coa.setMacId(MAC_ID);
@@ -2044,12 +2048,14 @@ public class InventoryMessageListener {
             if (coaParent != null) {
                 if (isValidDCGroup(groupId)) {
                     ChartOfAccount coa = new ChartOfAccount();
-                    coa.setCoaCode(dc.getAccountCode());
+                    COAKey key = new COAKey();
+                    key.setCoaCode(dc.getAccountCode());
+                    key.setCompCode(compCode);
+                    coa.setKey(key);
                     coa.setCoaLevel(3);
                     coa.setCoaParent(coaParent);
                     coa.setCoaNameEng(dc.getGroupName());
                     coa.setActive(true);
-                    coa.setCompCode(compCode);
                     coa.setCreatedBy(APP_NAME);
                     coa.setCreatedDate(Util1.getTodayDate());
                     coa.setMacId(MAC_ID);

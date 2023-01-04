@@ -9,14 +9,13 @@ import java.util.Date;
 @Data
 public class ChartOfAccount {
 
-    private String coaCode;
+    private COAKey key;
     private String coaNameEng;
     private boolean active;
     private Date createdDate;
     private String createdBy;
     private String coaParent;
     private String option;
-    private String compCode;
     private Integer coaLevel;
     private Integer macId;
     private String migCode;
