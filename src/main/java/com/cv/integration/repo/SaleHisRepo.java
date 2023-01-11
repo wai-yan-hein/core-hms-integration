@@ -11,7 +11,7 @@ import java.util.Date;
 import java.util.List;
 
 public interface SaleHisRepo extends JpaRepository<SaleHis, String> {
-    @Query("select o from SaleHis o where o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
+    @Query("select o from SaleHis o where o.intgUpdStatus is null and date(o.vouDate) >= :vou_date order by o.vouNo" )
     List<SaleHis> unUploadVoucher(@Param("vou_date") Date synDate);
 
     @Transactional

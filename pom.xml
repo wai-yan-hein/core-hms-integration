@@ -71,7 +71,7 @@
     </dependencies>
 
     <build>
-        <finalName>inventory-integration-service</finalName>
+        <finalName>core-hms-integration</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

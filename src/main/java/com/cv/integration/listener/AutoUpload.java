@@ -82,7 +82,7 @@ public class AutoUpload {
     private Environment environment;
     private boolean syncing = false;
 
-    @Scheduled(fixedRate = 10 * 60 * 1000)
+    @Scheduled(fixedRate = 2 * 60 * 1000)
     private void autoUpload() {
         if (!syncing) {
             log.info("autoUpload: Start");
@@ -161,7 +161,7 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadSaleVoucher: %s", vouchers.size()));
                 for (SaleHis vou : vouchers) {
-                    listener.sendSaleVoucherToAccount(vou.getVouNo());
+                    listener.sendSaleVoucherToAccount(vou);
                     sleep();
                 }
             }
@@ -174,7 +174,7 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadPurchaseVoucher: %s", vouchers.size()));
                 for (PurHis vou : vouchers) {
-                    listener.sendPurchaseVoucherToAccount(vou.getVouNo());
+                    listener.sendPurchaseVoucherToAccount(vou);
                     sleep();
                 }
             }
@@ -187,7 +187,7 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnInVoucher: %s", vouchers.size()));
                 for (RetInHis vou : vouchers) {
-                    listener.sendReturnInVoucherToAccount(vou.getVouNo());
+                    listener.sendReturnInVoucherToAccount(vou);
                     sleep();
                 }
             }
@@ -200,7 +200,7 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnOutVoucher: %s", vouchers.size()));
                 for (RetOutHis vou : vouchers) {
-                    listener.sendReturnOutVoucherToAccount(vou.getVouNo());
+                    listener.sendReturnOutVoucherToAccount(vou);
                     sleep();
                 }
             }
@@ -213,7 +213,7 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDVoucher: %s", vouchers.size()));
                 for (OPDHis op : vouchers) {
-                    listener.sendOPDVoucherToAccount(op.getVouNo());
+                    listener.sendOPDVoucherToAccount(op);
                     sleep();
                 }
             }
@@ -226,7 +226,7 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOTVoucher: %s", vouchers.size()));
                 for (OTHis ot : vouchers) {
-                    listener.sendOTVoucherToAccount(ot.getVouNo());
+                    listener.sendOTVoucherToAccount(ot);
                     sleep();
                 }
             }
@@ -239,7 +239,7 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadDCVoucher: %s", vouchers.size()));
                 for (DCHis vou : vouchers) {
-                    listener.sendDCVoucherToAccount(vou.getVouNo());
+                    listener.sendDCVoucherToAccount(vou);
                     sleep();
                 }
             }
