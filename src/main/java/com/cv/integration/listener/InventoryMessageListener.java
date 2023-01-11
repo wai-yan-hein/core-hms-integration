@@ -5,26 +5,16 @@ import com.cv.integration.entity.*;
 import com.cv.integration.model.*;
 import com.cv.integration.repo.*;
 import com.cv.integration.service.ReportService;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
-import org.springframework.core.env.Environment;
-import org.springframework.jms.annotation.JmsListener;
-import org.springframework.jms.core.JmsTemplate;
-import org.springframework.jms.core.MessageCreator;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import javax.jms.JMSException;
-import javax.jms.MapMessage;
-import javax.jms.Session;
-import java.text.DateFormat;
+import java.time.Duration;
 import java.util.*;
 
 @Component
@@ -32,9 +22,6 @@ import java.util.*;
 @RequiredArgsConstructor
 @PropertySource("file:config/application.properties")
 public class InventoryMessageListener {
-    private static final String LISTEN_QUEUE = "INVENTORY";
-    private static final String ACC_QUEUE = "ACCOUNT_QUEUE";
-    private final Gson gson = new GsonBuilder().serializeNulls().setDateFormat(DateFormat.FULL, DateFormat.FULL).create();
     @Autowired
     private final AccountSettingRepo accountSetting;
     @Autowired
@@ -61,8 +48,7 @@ public class InventoryMessageListener {
     private final OPDReceiveRepo opdReceiveRepo;
     @Autowired
     private final TraderRepo traderRepo;
-    @Autowired
-    private final DoctorRepo doctorRepo;
+
     @Autowired
     private final GenExpenseRepo genExpenseRepo;
     @Autowired
@@ -71,8 +57,6 @@ public class InventoryMessageListener {
     private final DCDoctorFeeRepo dcDoctorFeeRepo;
     @Autowired
     private final OTDoctorFeeRepo otDoctorFeeRepo;
-    @Autowired
-    private final JmsTemplate jmsTemplate;
     @Autowired
     private final TraderOpeningRepo traderOpeningRepo;
     @Autowired
@@ -139,21 +123,19 @@ public class InventoryMessageListener {
     private String outPatientCode;
     @Value("${app.type}")
     private String appType;
-    @Value("${upload.doctor}")
-    private String uploadDoctor;
-    @Autowired
-    private Environment environment;
+
     private final String ACK = "ACK";
     private final String APP_NAME = "CM";
     private final Integer MAC_ID = 99;
     private final String FOC = "FOC";
     private final String ERR = "ERR";
-    private String traderAcc = null;
+    @Autowired
     private WebClient accountApi;
+    @Autowired
+    private UserRepo userRepo;
 
     private void sendAccount(List<Gl> glList) {
         if (!glList.isEmpty()) {
-            initWebClient();
             Mono<Response> result = accountApi.post().uri("/account/save-gl-list").body(Mono.just(glList), List.class).retrieve().bodyToMono(Response.class);
             result.subscribe(response -> {
                 if (response != null) {
@@ -177,107 +159,65 @@ public class InventoryMessageListener {
                         case "ACK_COA_DC" -> updateDCCOA(code);
                     }
                 }
-            }, (e) -> {
-                log.info(e.getMessage());
-            });
+            }, (e) -> log.info(e.getMessage()));
         }
     }
 
-    private void initWebClient() {
-        if (accountApi == null) {
-            String url = environment.getProperty("account.url");
-            log.info("account : " + url);
-            if (url != null) {
-                accountApi = WebClient.builder().exchangeStrategies(ExchangeStrategies.builder().codecs(config -> config.defaultCodecs().maxInMemorySize(16 * 1024 * 1024)).build()).baseUrl(url).build();
-            }
-        }
+    public String saveCOA(ChartOfAccount coa) {
+        Mono<String> result = accountApi.post()
+                .uri("/account/save-coa")
+                .body(Mono.just(coa), ChartOfAccount.class)
+                .retrieve()
+                .bodyToMono(String.class);
+        return result.block(Duration.ofMinutes(1));
     }
 
-    private void sendMessage(String entity, String option, String data) {
-        MessageCreator mc = (Session session) -> {
-            MapMessage mm = session.createMapMessage();
-            mm.setString("SENDER_QUEUE", LISTEN_QUEUE);
-            mm.setString("ENTITY", entity);
-            mm.setString("OPTION", option);
-            mm.setString("DATA", data);
-            return mm;
-        };
-        jmsTemplate.send(ACC_QUEUE, mc);
-    }
 
     private void deleteGl(String tranSource, String vouNo, String srcAcc) {
-        MessageCreator mc = (Session session) -> {
-            MapMessage mm = session.createMapMessage();
-            mm.setString("SENDER_QUEUE", LISTEN_QUEUE);
-            mm.setString("ENTITY", "GL_DEL");
-            mm.setString("TRAN_SOURCE", tranSource);
-            mm.setString("VOU_NO", vouNo);
-            mm.setString("SRC_ACC", srcAcc);
-            return mm;
-        };
-        jmsTemplate.send(ACC_QUEUE, mc);
+        Gl gl = new Gl();
+        gl.setTranSource(tranSource);
+        gl.setRefNo(vouNo);
+        gl.setSrcAccCode(srcAcc);
+        Mono<String> result = accountApi.post()
+                .uri("/account/delete-gl-list")
+                .body(Mono.just(gl), Gl.class)
+                .retrieve()
+                .bodyToMono(String.class);
+        result.block(Duration.ofMinutes(1));
     }
 
-    @JmsListener(destination = LISTEN_QUEUE)
-    public void receivedMessage(final MapMessage message) throws JMSException {
-        String entity = Util1.isNull(message.getString("entity"), message.getString("ENTITY"));
-        String code = Util1.isNull(message.getString("VOUCHER-NO"), message.getString("CODE"));
-        int vouNo = message.getInt("vouNo");
-        switch (entity) {
-            case "TRADER" -> sendTrader(code);
-            case "SALE" -> sendSaleVoucherToAccount(code);
-            case "PURCHASE" -> sendPurchaseVoucherToAccount(code);
-            case "RETURNIN" -> sendReturnInVoucherToAccount(code);
-            case "RETURNOUT" -> sendReturnOutVoucherToAccount(code);
-            case "OPD" -> sendOPDVoucherToAccount(code);
-            case "OT" -> sendOTVoucherToAccount(code);
-            case "DC" -> sendDCVoucherToAccount(code);
-            case "OPD_RECEIVE" -> sendOPDReceiveToAccount(Integer.parseInt(code));
-            case "EXPENSE" -> sendGeneralExpenseToAcc(Integer.parseInt(code));
-            case "PAYMENT" -> sendPaymentToAcc(vouNo);
-            case "ACK_TRADER" -> updateTrader(code);
-            case "ACK_SALE" -> updateSale(code);
-            case "ACK_PURCHASE" -> updatePurchase(code);
-            case "ACK_RETURN_IN" -> updateReturnIn(code);
-            case "ACK_RETURN_OUT" -> updateReturnOut(code);
-            case "ACK_OPD" -> updateOPD(code);
-            case "ACK_OT" -> updateOT(code);
-            case "ACK_DC" -> updateDC(code);
-            case "ACK_OPD_RECEIVE" -> updateOPDReceive(Integer.parseInt(code));
-            case "ACK_EXPENSE" -> updateExpense(Integer.parseInt(code));
-            case "ACK_PAYMENT" -> updatePayment(Integer.parseInt(code));
-            case "ACK_OPENING" -> updateOpening(code);
-            case "ACK_COA_OPD" -> updateOPDCOA(code);
-            case "ACK_COA_OT" -> updateOTCOA(code);
-            case "ACK_COA_DC" -> updateDCCOA(code);
-            default -> log.error("Unexpected value: " + message.getString("ENTITY"));
-        }
-    }
+
 
     private void updateOPDCOA(String code) {
-        String[] split = code.split(",");
-        Integer groupId = Util1.getInteger(split[0]);
-        String coaCode = split[1];
-        opdCategoryRepo.updateOPDCategory(groupId, ACK, coaCode);
-        log.info(String.format("updateOPDCOA: %s", code));
+        if (code != null) {
+            String[] split = code.split(",");
+            Integer groupId = Util1.getInteger(split[0]);
+            String coaCode = split[1];
+            opdCategoryRepo.updateOPDCategory(groupId, ACK, coaCode);
+            log.info(String.format("updateOPDCOA: %s", code));
+        }
 
     }
 
     private void updateOTCOA(String code) {
-        String[] split = code.split(",");
-        Integer groupId = Util1.getInteger(split[0]);
-        String coaCode = split[1];
-        otGroupRepo.updateOTGroup(groupId, ACK, coaCode);
-        log.info(String.format("updateOTCOA: %s", code));
+        if (code != null) {
+            String[] split = code.split(",");
+            Integer groupId = Util1.getInteger(split[0]);
+            String coaCode = split[1];
+            otGroupRepo.updateOTGroup(groupId, ACK, coaCode);
+            log.info(String.format("updateOTCOA: %s", code));
+        }
 
     }
 
     private void updateDCCOA(String code) {
-        String[] split = code.split(",");
-        Integer groupId = Util1.getInteger(split[0]);
-        String coaCode = split[1];
-        dcGroupRepo.updateDCGroup(groupId, ACK, coaCode);
-        log.info(String.format("updateDCCOA: %s", code));
+        if (code != null) {
+            String[] split = code.split(",");
+            Integer groupId = Util1.getInteger(split[0]);
+            String coaCode = split[1];
+            dcGroupRepo.updateDCGroup(groupId, ACK, coaCode);
+            log.info(String.format("updateDCCOA: %s", code));
+        }
 
     }
 
@@ -314,72 +254,55 @@ public class InventoryMessageListener {
             }
         }
         opening.setCreatedDate(Util1.getTodayDate());
-        sendMessage("OPENING", "OPENING", gson.toJson(opening));
+        //sendMessage("OPENING", "OPENING", gson.toJson(opening));
         log.info(String.format("sendTraderOpening: %s", trader.getTraderCode()));
     }
 
-    public void sendTrader(String traderCode) {
+    public void sendTrader(Trader t) {
         if (Util1.getBoolean(uploadTrader)) {
-            Optional<Trader> trader = traderRepo.findById(traderCode);
-            if (trader.isPresent()) {
-                Trader c = trader.get();
-                if (c.isActive()) {
-                    if (traderAcc == null) {
-                        AccountSetting setting = hmAccSetting.get("SALE");
-                        if (setting != null) {
-                            traderAcc = setting.getBalanceAcc();
-                        }
-                    }
-                    String traderType = c.getTraderType();
+            if (t != null) {
+                if (t.isActive()) {
+                    String traderType = t.getTraderType();
+                    String code = t.getTraderCode();
                     AccTrader accTrader = new AccTrader();
-                    String code = c.getTraderCode();
-                    String userCode = c.getUserCode();
-                    accTrader.setTraderCode(c.getTraderCode());
-                    accTrader.setTraderName(c.getTraderName());
+                    TraderKey key = new TraderKey();
+                    key.setCode(code);
+                    key.setCompCode(compCode);
+                    accTrader.setKey(key);
+                    String userCode = t.getUserCode();
+                    accTrader.setTraderName(t.getTraderName());
                     accTrader.setUserCode(Util1.isNull(userCode, code));
                     accTrader.setActive(true);
-                    accTrader.setCompCode(compCode);
                     accTrader.setAppName(APP_NAME);
                     accTrader.setMacId(MAC_ID);
                     accTrader.setCreatedBy(APP_NAME);
-                    accTrader.setDiscriminator(traderType);
-                    accTrader.setAccountCode(traderAcc);
-                    /*if (c.getTraderGroup() != null) {
-                        String cusGroup = hmAccSetting.get("CUS_GROUP").getSourceAcc();
-                        String supGroup = hmAccSetting.get("SUP_GROUP").getSourceAcc();
-                        accTrader.setAccountName(c.getTraderGroup().getGroupName());
-                        accTrader.setAccountParent(traderType.equals("C") ? cusGroup : supGroup);
-                        accTrader.setGroupCode(c.getTraderGroup().getGroupId());
-                        accTrader.setAccountCode(null);
-                    }*/
-                    String data = gson.toJson(accTrader);
-                    sendMessage("TRADER", "TRADER", data);
+                    accTrader.setTraderType(traderType);
+                    accTrader.setAccCode(traderType.equals("C") ? getCustomerAcc() : getSupplierAcc());
+                    try {
+                        Mono<AccTrader> result = accountApi.post()
+                                .uri("/account/save-trader")
+                                .body(Mono.just(accTrader), AccTrader.class)
+                                .retrieve().bodyToMono(AccTrader.class)
+                                .doOnError((e) -> log.error(e.getMessage()));
+                        AccTrader trader = result.block();
+                        assert trader != null;
+                        updateTrader(t.getTraderCode());
+                    } catch (Exception e) {
+                        log.error("sendTrader : " + e.getMessage());
+                    }
                 }
             }
         }
     }
 
-    public void sendDoctor(String doctorId) {
-        if (Util1.getBoolean(uploadDoctor)) {
-            Optional<Doctor> doctor = doctorRepo.findById(doctorId);
-            if (doctor.isPresent()) {
-                Doctor d = doctor.get();
-                if (d.isActive()) {
-                    AccTrader accTrader = new AccTrader();
-                    accTrader.setTraderCode(d.getDoctorId());
-                    accTrader.setTraderName(d.getDoctorName());
-                    accTrader.setActive(true);
-                    accTrader.setCompCode(compCode);
-                    accTrader.setAppName(APP_NAME);
-                    accTrader.setMacId(MAC_ID);
-                    accTrader.setDiscriminator("D");
-                    //accTrader.setAccountCode(drType.getAccount());
-                    String data = gson.toJson(accTrader);
-                    sendMessage("TRADER", "TRADER", data);
-                }
-            }
-        }
+    private String getCustomerAcc() {
+        return userRepo.getProperty("customer.account", compCode);
     }
+
+    private String getSupplierAcc() {
+        return userRepo.getProperty("supplier.account", compCode);
+    }
+
 
     private void updateTrader(String traderCode) {
         traderRepo.updateTrader(traderCode, ACK);
@@ -405,7 +328,6 @@ public class InventoryMessageListener {
                         Date vouDate = Util1.toMySqlDate(sh.getVouDate());
                         String traderCode = null;
                         String reference = null;
-                        String traderGroup = null;
                         String accCodeByLoc = sh.getLocation().getAccCode();
                         String deptCodeByLoc = sh.getLocation().getDeptCode();
                         String traderByLoc = sh.getLocation().getTraderCode();
@@ -425,10 +347,6 @@ public class InventoryMessageListener {
                         } else {
                             Trader trader = sh.getTrader();
                             traderCode = trader.getTraderCode();
-                            if (trader.getTraderGroup() != null) {
-                                traderGroup = trader.getTraderGroup().getGroupId();
-                            }
-                            //reference = String.format("%s : %s : (%s)", Util1.isNull(userCode, traderCode), traderName, traderType);
                         }
                         String curCode = sh.getCurrency().getAccCurCode();
                         boolean deleted = sh.isDeleted();
@@ -441,6 +359,10 @@ public class InventoryMessageListener {
                         //income
                         if (vouBalAmt > 0) {
                             Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
                             gl.setGlDate(vouDate);
                             gl.setDescription("Sale Voucher Total");
                             gl.setSrcAccCode(admission ? Util1.isNull(ipdSrc, srcAcc) : srcAcc);
@@ -450,19 +372,21 @@ public class InventoryMessageListener {
                             gl.setCrAmt(vouTotalAmt);
                             gl.setCurCode(curCode);
                             gl.setReference(reference);
-                            gl.setCompCode(compCode);
                             gl.setCreatedDate(Util1.getTodayDate());
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
                             gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
-                            gl.setTraderGroup(traderGroup);
                             listGl.add(gl);
                         }
                         //discount
                         if (vouDisAmt > 0) {
                             Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
                             if (vouPaidAmt > 0) {
                                 gl.setSrcAccCode(payAcc);
                                 gl.setCash(true);
@@ -477,19 +401,21 @@ public class InventoryMessageListener {
                             gl.setCurCode(curCode);
                             gl.setReference(reference);
                             gl.setDeptCode(deptCode);
-                            gl.setCompCode(compCode);
                             gl.setCreatedDate(Util1.getTodayDate());
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
                             gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
-                            gl.setTraderGroup(traderGroup);
                             listGl.add(gl);
                         }
                         //payment
                         if (vouPaidAmt > 0) {
                             Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
                             gl.setGlDate(vouDate);
                             gl.setDescription("Sale Voucher Paid");
                             gl.setSrcAccCode(payAcc);
@@ -498,7 +424,6 @@ public class InventoryMessageListener {
                             gl.setCurCode(curCode);
                             gl.setReference(reference);
                             gl.setDeptCode(deptCode);
-                            gl.setCompCode(compCode);
                             gl.setCreatedDate(Util1.getTodayDate());
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
@@ -506,13 +431,11 @@ public class InventoryMessageListener {
                             gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
                             gl.setCash(true);
-                            gl.setTraderGroup(traderGroup);
                             listGl.add(gl);
                         }
 
                         if (!listGl.isEmpty()) {
-                            sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
-                            log.info(String.format("sendSaleVoucherToAccount: %s", vouNo));
+                            sendAccount(listGl);
                         } else {
                             deleteGl(tranSource, vouNo, null);
                             saleHisRepo.updateSale(vouNo, FOC);
@@ -541,7 +464,6 @@ public class InventoryMessageListener {
                     PurHis ph = purHis.get();
                     String srcAcc = setting.getSourceAcc();
                     String payAcc = setting.getPayAcc();
-                    String disAcc = setting.getDiscountAcc();
                     String balAcc = setting.getBalanceAcc();
                     String deptCode = setting.getDeptCode();
                     Date vouDate = Util1.toMySqlDate(ph.getVouDate());
@@ -549,15 +471,9 @@ public class InventoryMessageListener {
                     boolean deleted = ph.isDeleted();
                     double vouTotalAmt = Util1.getDouble(ph.getVouTotal());
                     double vouPaidAmt = Util1.getDouble(ph.getVouPaid());
-                    double vouDisAmt = Util1.getDouble(ph.getVouDiscount());
                     double vouBalAmt = Util1.getDouble(ph.getVouBalance());
                     Trader trader = ph.getTrader();
                     String traderCode = trader.getTraderCode();
-                    String traderGroup = null;
-                    if (trader.getTraderGroup() != null) {
-                        traderGroup = trader.getTraderGroup().getGroupId();
-                    }
-                    //String reference = String.format("%s : %s : (%s)", Util1.isNull(userCode, traderCode), traderName, traderType);
                     String reference = ph.getRemark();
                     String deptCodeByLoc = ph.getLocation().getDeptCode();
                     String accByLoc = ph.getLocation().getPurAccount();
@@ -567,6 +483,10 @@ public class InventoryMessageListener {
                     //income
                     if (vouBalAmt > 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(vouDate);
                         gl.setDescription("Purchase Voucher Total");
                         gl.setSrcAccCode(srcAcc);
@@ -576,14 +496,12 @@ public class InventoryMessageListener {
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
-                        gl.setCompCode(compCode);
                         gl.setCreatedDate(Util1.getTodayDate());
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
                         gl.setRefNo(vouNo);
                         gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
-                        gl.setTraderGroup(traderGroup);
                         listGl.add(gl);
                     }
                     //discount
@@ -591,6 +509,10 @@ public class InventoryMessageListener {
                     //payment
                     if (vouPaidAmt > 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(vouDate);
                         gl.setDescription("Purchase Voucher Paid");
                         gl.setSrcAccCode(payAcc);
@@ -599,7 +521,6 @@ public class InventoryMessageListener {
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
-                        gl.setCompCode(compCode);
                         gl.setCreatedDate(Util1.getTodayDate());
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
@@ -607,11 +528,10 @@ public class InventoryMessageListener {
                         gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
                         gl.setCash(true);
-                        gl.setTraderGroup(traderGroup);
                         listGl.add(gl);
                     }
                     if (!listGl.isEmpty()) {
-                        sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
+                        sendAccount(listGl);
                     } else {
                         deleteGl(tranSource, vouNo, null);
                         purHisRepo.updatePurchase(vouNo, ACK);
@@ -644,8 +564,7 @@ public class InventoryMessageListener {
                     String deptCode = setting.getDeptCode();
                     Date vouDate = Util1.toMySqlDate(ri.getVouDate());
                     String traderCode;
-                    String reference;
-                    String traderGroup = null;
+                    String reference = null;
                     if (!Objects.isNull(ri.getPatient())) {
                         String patientNo = ri.getPatient().getPatientNo();
                         String patientName = ri.getPatient().getPatientName();
@@ -659,11 +578,7 @@ public class InventoryMessageListener {
                     } else {
                         Trader trader = ri.getTrader();
                         traderCode = trader.getTraderCode();
-                        if (trader.getTraderGroup() != null) {
-                            traderGroup = trader.getTraderGroup().getGroupId();
-                        }
-                        reference = null;
-                        //reference = String.format("%s : %s : (%s)", Util1.isNull(userCode, traderCode), traderName, traderType);
+
                     }
                     String curCode = ri.getCurrency().getAccCurCode();
                     boolean deleted = ri.isDeleted();
@@ -680,6 +595,10 @@ public class InventoryMessageListener {
                     //income
                     if (vouBalAmt > 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(vouDate);
                         gl.setDescription("Return In Voucher Total");
                         gl.setSrcAccCode(srcAcc);
@@ -689,19 +608,21 @@ public class InventoryMessageListener {
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
-                        gl.setCompCode(compCode);
                         gl.setCreatedDate(Util1.getTodayDate());
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
                         gl.setRefNo(vouNo);
                         gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
-                        gl.setTraderGroup(traderGroup);
                         listGl.add(gl);
                     }
                     //payment
                     if (vouPaidAmt > 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(vouDate);
                         gl.setDescription("Return In Voucher Paid");
                         gl.setSrcAccCode(payAcc);
@@ -710,7 +631,6 @@ public class InventoryMessageListener {
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
-                        gl.setCompCode(compCode);
                         gl.setCreatedDate(Util1.getTodayDate());
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
@@ -718,10 +638,9 @@ public class InventoryMessageListener {
                         gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
                         gl.setCash(true);
-                        gl.setTraderGroup(traderGroup);
                         listGl.add(gl);
                     }
-                    if (!listGl.isEmpty()) sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
+                    if (!listGl.isEmpty()) sendAccount(listGl);
                 } else {
                     log.info(String.format("sendReturnInVoucherToAccount: %s not found.", vouNo));
                 }
@@ -756,10 +675,6 @@ public class InventoryMessageListener {
                     double vouBalAmt = Util1.getDouble(ro.getVouBalance());
                     Trader trader = ro.getTrader();
                     String traderCode = trader.getTraderCode();
-                    String traderGroup = null;
-                    if (trader.getTraderGroup() != null) {
-                        traderGroup = trader.getTraderGroup().getGroupId();
-                    }
                     String reference = ro.getRemark();
                     String deptCodeByLoc = ro.getLocation().getDeptCode();
                     String accByLoc = ro.getLocation().getAccCode();
@@ -769,6 +684,10 @@ public class InventoryMessageListener {
                     //income
                     if (vouBalAmt > 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(vouDate);
                         gl.setDescription("Return Out Voucher Total");
                         gl.setSrcAccCode(srcAcc);
@@ -778,19 +697,21 @@ public class InventoryMessageListener {
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
-                        gl.setCompCode(compCode);
                         gl.setCreatedDate(Util1.getTodayDate());
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
                         gl.setRefNo(vouNo);
                         gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
-                        gl.setTraderGroup(traderGroup);
                         listGl.add(gl);
                     }
                     //payment
                     if (vouPaidAmt > 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(vouDate);
                         gl.setDescription("Return Out Voucher Paid");
                         gl.setSrcAccCode(payAcc);
@@ -799,7 +720,6 @@ public class InventoryMessageListener {
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
-                        gl.setCompCode(compCode);
                         gl.setCreatedDate(Util1.getTodayDate());
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
@@ -807,10 +727,9 @@ public class InventoryMessageListener {
                         gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
                         gl.setCash(true);
-                        gl.setTraderGroup(traderGroup);
                         listGl.add(gl);
                     }
-                    if (!listGl.isEmpty()) sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
+                    if (!listGl.isEmpty()) sendAccount(listGl);
 
                 } else {
                     log.info(String.format("sendReturnOutVoucherToAccount: %s not found.", vouNo));
@@ -891,6 +810,10 @@ public class InventoryMessageListener {
                             srcAcc = Util1.isNull(tmp, srcAcc);
                             if (amount != 0) {
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setAccCode(srcAcc);
                                 //cash
                                 if (paymentId == 1) {
@@ -911,7 +834,6 @@ public class InventoryMessageListener {
                                 gl.setGlDate(vouDate);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -926,13 +848,16 @@ public class InventoryMessageListener {
                                 if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
                                     String[] accounts = payableAcc.split(",");
                                     gl = new Gl();
+                                    key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
                                     gl.setGlDate(vouDate);
                                     gl.setSrcAccCode(accounts[0]);
                                     gl.setAccCode(accounts[1]);
                                     gl.setCrAmt(amount);
                                     gl.setRefNo(vouNo);
                                     gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                    gl.setCompCode(compCode);
                                     gl.setMacId(MAC_ID);
                                     gl.setCreatedBy(APP_NAME);
                                     gl.setCurCode(curCode);
@@ -951,13 +876,16 @@ public class InventoryMessageListener {
                             if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc) && amount > 0) {
                                 String[] accounts = moAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(moFeeAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -974,13 +902,16 @@ public class InventoryMessageListener {
                             if (staffAmt > 0 && !Util1.isNullOrEmpty(staffAcc) && amount > 0) {
                                 String[] accounts = staffAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(staffAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -989,7 +920,6 @@ public class InventoryMessageListener {
                                 gl.setCreatedDate(Util1.getTodayDate());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
-                                //gl.setTraderCode(traderCode);
                                 gl.setDeleted(deleted);
                                 listGl.add(gl);
                             }
@@ -997,13 +927,16 @@ public class InventoryMessageListener {
                             if (techAmt > 0 && !Util1.isNullOrEmpty(techAcc) && amount > 0) {
                                 String[] accounts = techAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(techAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1012,7 +945,6 @@ public class InventoryMessageListener {
                                 gl.setCreatedDate(Util1.getTodayDate());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
-                                //gl.setTraderCode(traderCode);
                                 gl.setDeleted(deleted);
                                 listGl.add(gl);
                             }
@@ -1020,13 +952,16 @@ public class InventoryMessageListener {
                             if (referAmt > 0 && !Util1.isNullOrEmpty(referAcc) && amount > 0) {
                                 String[] accounts = referAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(referAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1043,13 +978,16 @@ public class InventoryMessageListener {
                             if (readerAmt > 0 && !Util1.isNullOrEmpty(readerAcc) && amount > 0) {
                                 String[] accounts = readerAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(readerAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1058,7 +996,6 @@ public class InventoryMessageListener {
                                 gl.setCreatedDate(Util1.getTodayDate());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
-                                //gl.setTraderCode(traderCode);
                                 gl.setDeleted(deleted);
                                 listGl.add(gl);
                             }
@@ -1066,6 +1003,10 @@ public class InventoryMessageListener {
                         //discount
                         if (vouDisAmt > 0) {
                             Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
                             if (vouBalAmt > 0) {
                                 gl.setSrcAccCode(balAcc);
                                 gl.setAccCode(disAcc);
@@ -1081,7 +1022,6 @@ public class InventoryMessageListener {
                             gl.setCurCode(curCode);
                             gl.setReference(reference);
                             gl.setDeptCode(mainDept);
-                            gl.setCompCode(compCode);
                             gl.setCreatedDate(Util1.getTodayDate());
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
@@ -1091,8 +1031,7 @@ public class InventoryMessageListener {
                             listGl.add(gl);
                         }
                         if (!listGl.isEmpty()) {
-                            sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
-                            log.info(String.format("sendOPDVoucherToAccount: %s", vouNo));
+                            sendAccount(listGl);
                         } else {
                             deleteGl(tranSource, vouNo, null);
                             opdHisRepo.updateOPD(vouNo, FOC);
@@ -1181,6 +1120,10 @@ public class InventoryMessageListener {
                             //discount
                             if (serviceId == Util1.getInteger(otDiscountId)) {
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 //cash
                                 if (paymentId == 1) {
                                     gl.setSrcAccCode(payAcc);
@@ -1195,7 +1138,6 @@ public class InventoryMessageListener {
                                 gl.setCrAmt(amount);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1212,13 +1154,16 @@ public class InventoryMessageListener {
                                 //credit
                                 if (paymentId == 2) {
                                     Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
                                     gl.setGlDate(vouDate);
                                     gl.setSrcAccCode(Util1.isNull(opdAcc, payAcc));
                                     gl.setAccCode(balAcc);
                                     gl.setDrAmt(amount);
                                     gl.setRefNo(vouNo);
                                     gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                    gl.setCompCode(compCode);
                                     gl.setMacId(MAC_ID);
                                     gl.setCreatedBy(APP_NAME);
                                     gl.setCurCode(curCode);
@@ -1235,13 +1180,16 @@ public class InventoryMessageListener {
                             } else if (serviceId == Util1.getInteger(otRefundId)) {
                                 //refund
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(Util1.isNull(opdAcc, payAcc));
                                 gl.setAccCode(balAcc);
                                 gl.setCrAmt(amount);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1260,6 +1208,10 @@ public class InventoryMessageListener {
                                 srcAcc = Util1.isNull(tmp, srcAcc);
                                 if (amount != 0) {
                                     Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
                                     gl.setAccCode(srcAcc);
                                     //cash
                                     if (paymentId == 1) {
@@ -1279,7 +1231,6 @@ public class InventoryMessageListener {
                                     gl.setGlDate(vouDate);
                                     gl.setRefNo(vouNo);
                                     gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                    gl.setCompCode(compCode);
                                     gl.setMacId(MAC_ID);
                                     gl.setCreatedBy(APP_NAME);
                                     gl.setCurCode(curCode);
@@ -1294,13 +1245,16 @@ public class InventoryMessageListener {
                                     if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
                                         String[] accounts = payableAcc.split(",");
                                         gl = new Gl();
+                                        key = new GlKey();
+                                        key.setDeptId(1);
+                                        key.setCompCode(compCode);
+                                        gl.setKey(key);
                                         gl.setGlDate(vouDate);
                                         gl.setSrcAccCode(accounts[0]);
                                         gl.setAccCode(accounts[1]);
                                         gl.setCrAmt(amount);
                                         gl.setRefNo(vouNo);
                                         gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                        gl.setCompCode(compCode);
                                         gl.setMacId(MAC_ID);
                                         gl.setCreatedBy(APP_NAME);
                                         gl.setCurCode(curCode);
@@ -1320,13 +1274,16 @@ public class InventoryMessageListener {
                             if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc) && amount > 0) {
                                 String[] accounts = moAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(moFeeAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1342,13 +1299,16 @@ public class InventoryMessageListener {
                             if (staffAmt > 0 && !Util1.isNullOrEmpty(staffAcc) && amount > 0) {
                                 String[] accounts = staffAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(staffAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1364,13 +1324,16 @@ public class InventoryMessageListener {
                             if (nurseAmt > 0 && !Util1.isNullOrEmpty(nurseAcc) && amount > 0) {
                                 String[] accounts = nurseAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(nurseAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1384,8 +1347,7 @@ public class InventoryMessageListener {
                             }
                         }//loop
                         if (!listGl.isEmpty()) {
-                            sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
-                            log.info(String.format("sendOTVoucherToAccount: %s", vouNo));
+                            sendAccount(listGl);
                         } else {
                             deleteGl(tranSource, vouNo, null);
                             otHisRepo.updateOT(vouNo, FOC);
@@ -1467,6 +1429,10 @@ public class InventoryMessageListener {
                             //discount
                             if (serviceId == Util1.getInteger(dcDiscountId)) {
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 //cash
                                 if (paymentId == 1) {
                                     gl.setSrcAccCode(payAcc);
@@ -1481,7 +1447,6 @@ public class InventoryMessageListener {
                                 gl.setCrAmt(amount);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1497,13 +1462,16 @@ public class InventoryMessageListener {
                                 //credit
                                 if (paymentId == 2) {
                                     Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
                                     gl.setGlDate(vouDate);
                                     gl.setSrcAccCode(Util1.isNull(accountCode, payAcc));
                                     gl.setAccCode(balAcc);
                                     gl.setDrAmt(amount);
                                     gl.setRefNo(vouNo);
                                     gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                    gl.setCompCode(compCode);
                                     gl.setMacId(MAC_ID);
                                     gl.setCreatedBy(APP_NAME);
                                     gl.setCurCode(curCode);
@@ -1520,13 +1488,16 @@ public class InventoryMessageListener {
                             } else if (serviceId == Util1.getInteger(dcRefundId)) {
                                 //refund
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(Util1.isNull(accountCode, payAcc));
                                 gl.setAccCode(balAcc);
                                 gl.setCrAmt(amount);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1542,6 +1513,10 @@ public class InventoryMessageListener {
                             } else if (serviceId == Util1.getInteger(packageId)) {
                                 //refund
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accountCode);
                                 gl.setAccCode(balAcc);
@@ -1552,7 +1527,6 @@ public class InventoryMessageListener {
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1568,6 +1542,10 @@ public class InventoryMessageListener {
                                 srcAcc = Util1.isNull(accountCode, srcAcc);
                                 if (amount != 0) {
                                     Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
                                     gl.setAccCode(srcAcc);
                                     //cash
                                     if (paymentId == 1) {
@@ -1587,7 +1565,6 @@ public class InventoryMessageListener {
                                     gl.setGlDate(vouDate);
                                     gl.setRefNo(vouNo);
                                     gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                    gl.setCompCode(compCode);
                                     gl.setMacId(MAC_ID);
                                     gl.setCreatedBy(APP_NAME);
                                     gl.setCurCode(curCode);
@@ -1602,13 +1579,16 @@ public class InventoryMessageListener {
                                     if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
                                         String[] accounts = payableAcc.split(",");
                                         gl = new Gl();
+                                        key = new GlKey();
+                                        key.setDeptId(1);
+                                        key.setCompCode(compCode);
+                                        gl.setKey(key);
                                         gl.setGlDate(vouDate);
                                         gl.setSrcAccCode(accounts[0]);
                                         gl.setAccCode(accounts[1]);
                                         gl.setCrAmt(amount);
                                         gl.setRefNo(vouNo);
                                         gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                        gl.setCompCode(compCode);
                                         gl.setMacId(MAC_ID);
                                         gl.setCreatedBy(APP_NAME);
                                         gl.setCurCode(curCode);
@@ -1628,13 +1608,16 @@ public class InventoryMessageListener {
                             if (moFeeAmt > 0 && !Util1.isNullOrEmpty(moAcc) && amount > 0) {
                                 String[] accounts = moAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(moFeeAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1650,13 +1633,16 @@ public class InventoryMessageListener {
                             if (techAmt > 0 && !Util1.isNullOrEmpty(techAcc) && amount > 0) {
                                 String[] accounts = techAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(techAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1672,13 +1658,16 @@ public class InventoryMessageListener {
                             if (nurseAmt > 0 && !Util1.isNullOrEmpty(nurseAcc) && amount > 0) {
                                 String[] accounts = nurseAcc.split(",");
                                 Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(accounts[0]);
                                 gl.setAccCode(accounts[1]);
                                 gl.setCrAmt(nurseAmt);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setCompCode(compCode);
                                 gl.setMacId(MAC_ID);
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
@@ -1692,7 +1681,7 @@ public class InventoryMessageListener {
                             }
                         }
                         if (!listGl.isEmpty()) {
-                            sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
+                            sendAccount(listGl);
                             log.info(String.format("sendDCVoucherToAccount: %s", vouNo));
                         } else {
                             deleteGl(tranSource, vouNo, null);
@@ -1756,6 +1745,10 @@ public class InventoryMessageListener {
                 if (payAmt != 0) {
                     List<Gl> list = new ArrayList<>();
                     Gl gl = new Gl();
+                    GlKey key = new GlKey();
+                    key.setDeptId(1);
+                    key.setCompCode(compCode);
+                    gl.setKey(key);
                     gl.setGlDate(payDate);
                     if (payAmt > 0) {
                         gl.setDrAmt(payAmt);
@@ -1768,7 +1761,6 @@ public class InventoryMessageListener {
                     gl.setAccCode(balAcc);
                     gl.setRefNo(String.valueOf(id));
                     gl.setDeptCode(deptCode);
-                    gl.setCompCode(compCode);
                     gl.setMacId(MAC_ID);
                     gl.setCreatedBy(APP_NAME);
                     gl.setCurCode(curCode);
@@ -1780,7 +1772,7 @@ public class InventoryMessageListener {
                     gl.setDeleted(deleted);
                     gl.setCash(true);
                     list.add(gl);
-                    sendMessage("GL_LIST", "OPD_RECEIVE", gson.toJson(list));
+                    sendAccount(list);
                     log.info(String.format("sendOPDReceiveToAccount: %s", id));
                 }
             }
@@ -1813,13 +1805,16 @@ public class InventoryMessageListener {
                 boolean deleted = ge.isDeleted();
                 if (Util1.getDouble(expAmt) > 0) {
                     Gl gl = new Gl();
+                    GlKey key = new GlKey();
+                    key.setDeptId(1);
+                    key.setCompCode(compCode);
+                    gl.setKey(key);
                     gl.setGlDate(expDate);
                     gl.setSrcAccCode(srcAcc);
                     gl.setAccCode(account);
                     gl.setCrAmt(expAmt);
                     gl.setRefNo(expenseId);
                     gl.setDeptCode(depCode);
-                    gl.setCompCode(compCode);
                     gl.setMacId(MAC_ID);
                     gl.setCreatedBy(APP_NAME);
                     gl.setCurCode(curCode);
@@ -1831,7 +1826,7 @@ public class InventoryMessageListener {
                     gl.setCash(true);
                     listGl.add(gl);
                 }
-                if (!listGl.isEmpty()) sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
+                if (!listGl.isEmpty()) sendAccount(listGl);
                 log.info(String.format("sendGeneralExpenseToAcc: %s", expenseId));
             }
         }
@@ -1885,6 +1880,10 @@ public class InventoryMessageListener {
                     List<Gl> listGl = new ArrayList<>();
                     if (payAmt != 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(payDate);
                         gl.setAccCode(balAcc);
                         if (payAmt > 0) {
@@ -1906,7 +1905,6 @@ public class InventoryMessageListener {
                         }
                         gl.setRefNo(String.valueOf(payId));
                         gl.setDeptCode(mainDept);
-                        gl.setCompCode(compCode);
                         gl.setMacId(MAC_ID);
                         gl.setCreatedBy(APP_NAME);
                         gl.setCurCode(curCode);
@@ -1921,6 +1919,10 @@ public class InventoryMessageListener {
                     }
                     if (discount > 0) {
                         Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
                         gl.setGlDate(payDate);
                         if (pay.getTrader().getTraderType().equals("C")) {
                             gl.setSrcAccCode(cusDisAcc);
@@ -1935,7 +1937,6 @@ public class InventoryMessageListener {
                         gl.setAccCode(balAcc);
                         gl.setRefNo(String.valueOf(payId));
                         gl.setDeptCode(mainDept);
-                        gl.setCompCode(compCode);
                         gl.setMacId(MAC_ID);
                         gl.setCreatedBy(APP_NAME);
                         gl.setCurCode(curCode);
@@ -1948,7 +1949,7 @@ public class InventoryMessageListener {
                         gl.setCash(true);
                         listGl.add(gl);
                     }
-                    if (!listGl.isEmpty()) sendMessage("GL_LIST", tranSource, gson.toJson(listGl));
+                    if (!listGl.isEmpty()) sendAccount(listGl);
                 }
             }
         }
@@ -1978,7 +1979,7 @@ public class InventoryMessageListener {
                 coa.setMacId(MAC_ID);
                 coa.setOption("USR");
                 coa.setMigCode(String.valueOf(opd.getCatId()));
-                sendMessage("COA", "COA_OPD", gson.toJson(coa));
+                updateOPD(saveCOA(coa));
                 log.info(String.format("sendOPDGroup: %s", opd.getCatName()));
             } else {
                 log.info("coa parent is not assigned.");
@@ -2019,7 +2020,7 @@ public class InventoryMessageListener {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(groupId));
-                    sendMessage("COA", "COA_OT", gson.toJson(coa));
+                    updateOT(saveCOA(coa));
                     log.info(String.format("sendOTGroup: %s", ot.getGroupName()));
                 }
             } else {
@@ -2061,7 +2062,7 @@ public class InventoryMessageListener {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(dc.getGroupId()));
-                    sendMessage("COA", "COA_DC", gson.toJson(coa));
+                    updateDC(saveCOA(coa));
                     log.info(String.format("sendDCGroup: %s", dc.getGroupName()));
                 }
             } else {

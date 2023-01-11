@@ -5,26 +5,17 @@ import lombok.NonNull;
 
 @Data
 public class AccTrader implements java.io.Serializable {
-    @NonNull
-    private String traderCode;
-    @NonNull
+    private TraderKey key;
     private String userCode;
-    @NonNull
     private String traderName;
-    @NonNull
     private String appName;
-    @NonNull
     private Boolean active;
-    @NonNull
-    private String discriminator;
-    private String accountCode;
+    private String traderType;
+    private String accCode;
     private String accountName;
     private String accountParent;
     private String groupCode;
-    @NonNull
     private Integer macId;
-    @NonNull
-    private String compCode;
     private String createdBy;
 
     public AccTrader() {

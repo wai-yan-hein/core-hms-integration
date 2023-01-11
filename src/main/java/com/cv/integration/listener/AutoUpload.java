@@ -24,8 +24,7 @@ public class AutoUpload {
     private String syncDate;
     @Value("${upload.trader}")
     private String uploadTrader;
-    @Value("${upload.doctor}")
-    private String uploadDoctor;
+
     @Value("${upload.sale}")
     private String uploadSale;
     @Value("${upload.purchase}")
@@ -66,8 +65,7 @@ public class AutoUpload {
     private final DCHisRepo dcHisRepo;
     @Autowired
     private final TraderRepo traderRepo;
-    @Autowired
-    private final DoctorRepo doctorRepo;
+
     @Autowired
     private final PaymentHisRepo paymentHis;
     @Autowired
@@ -94,7 +92,6 @@ public class AutoUpload {
             uploadDCSetup();
             uploadTrader();
             uploadTraderOpening();
-            uploadDoctor();
             uploadSaleVoucher();
             uploadPurchaseVoucher();
             uploadReturnInVoucher();
@@ -152,20 +149,11 @@ public class AutoUpload {
             List<Trader> traders = traderRepo.unUploadTrader();
             if (!traders.isEmpty()) {
                 log.info(String.format("uploadTrader: %s", traders.size()));
-                traders.forEach(t -> listener.sendTrader(t.getTraderCode()));
+                traders.forEach(listener::sendTrader);
             }
         }
     }
 
-    private void uploadDoctor() {
-        if (Util1.getBoolean(uploadDoctor)) {
-            List<Doctor> doctors = doctorRepo.unUploadDoctor();
-            if (!doctors.isEmpty()) {
-                log.info(String.format("uploadDoctor: %s", doctors.size()));
-                doctors.forEach(t -> listener.sendDoctor(t.getDoctorId()));
-            }
-        }
-    }
 
     private void uploadSaleVoucher() {
         if (Util1.getBoolean(uploadSale)) {

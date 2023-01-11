@@ -9,11 +9,11 @@ import java.awt.*;
 
 @SpringBootApplication
 @EnableScheduling
-public class InventoryIntegrationServiceApplication {
+public class CoreHmsIntegration {
 
     public static void main(String[] args) throws AWTException {
         new Tray().startup();
-        SpringApplication.run(InventoryIntegrationServiceApplication.class, args);
+        SpringApplication.run(CoreHmsIntegration.class, args);
     }
 
 }
