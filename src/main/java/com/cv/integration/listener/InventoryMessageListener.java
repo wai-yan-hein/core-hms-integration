@@ -1439,7 +1439,6 @@ public class InventoryMessageListener {
                         } else if (serviceId == Util1.getInteger(dcPaidId) || serviceId == Util1.getInteger(dcDepositId)) {
                             //paid or deposit
                             //credit
-                            if (paymentId == 2) {
                                 Gl gl = new Gl();
                                 GlKey key = new GlKey();
                                 key.setDeptId(1);
@@ -1463,7 +1462,7 @@ public class InventoryMessageListener {
                                 gl.setDeleted(deleted);
                                 gl.setCash(true);
                                 listGl.add(gl);
-                            }
+
                         } else if (serviceId == Util1.getInteger(dcRefundId)) {
                             //refund
                             Gl gl = new Gl();
