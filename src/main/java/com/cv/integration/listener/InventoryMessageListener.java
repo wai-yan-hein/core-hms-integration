@@ -182,7 +182,7 @@ public class InventoryMessageListener {
         gl.setRefNo(vouNo);
         gl.setSrcAccCode(srcAcc);
         Mono<String> result = accountApi.post()
-                .uri("/account/delete-gl-list")
+                .uri("/account/delete-gl-by-voucher")
                 .body(Mono.just(gl), Gl.class)
                 .retrieve()
                 .bodyToMono(String.class);
