@@ -2,6 +2,8 @@ package com.cv.integration.common;
 
 import com.google.common.base.Strings;
 import com.google.gson.Gson;
+import com.google.myanmartools.TransliterateZ2U;
+import com.google.myanmartools.ZawgyiDetector;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 
@@ -10,6 +12,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -18,6 +21,7 @@ import java.util.Date;
 
 @Slf4j
 public class Util1 {
+    private static final DecimalFormat df0 = new DecimalFormat("0");
     public static double getDouble(Object obj) {
         return obj == null ? 0 : Double.parseDouble(obj.toString());
     }
@@ -90,4 +94,6 @@ public class Util1 {
         }
         return IOUtils.toByteArray(new FileInputStream(exportPath));
     }
+
+
 }
