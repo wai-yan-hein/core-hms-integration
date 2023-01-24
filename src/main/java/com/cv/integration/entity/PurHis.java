@@ -34,7 +34,7 @@ public class PurHis implements java.io.Serializable {
     @Column(name = "discount")
     private String vouDiscount;
     @Column(name = "paid")
-    private String vouPaid;
+    private double vouPaid;
     @Column(name = "deleted")
     private boolean deleted;
     @ManyToOne

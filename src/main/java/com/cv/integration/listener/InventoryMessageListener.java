@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -123,7 +124,6 @@ public class InventoryMessageListener {
     private String outPatientCode;
     @Value("${app.type}")
     private String appType;
-
     private final String ACK = "ACK";
     private final String APP_NAME = "CM";
     private final Integer MAC_ID = 99;
@@ -311,6 +311,7 @@ public class InventoryMessageListener {
         log.info(String.format("updateTrader: %s", traderCode));
     }
 
+
     public void sendSaleVoucherToAccount(SaleHis sh) {
         if (Util1.getBoolean(uploadSale)) {
             String tranSource = "SALE";
@@ -449,7 +450,7 @@ public class InventoryMessageListener {
         }
     }
 
-    private void updateSale(String vouNo) {
+    public void updateSale(String vouNo) {
         saleHisRepo.updateSale(vouNo, ACK);
         log.info(String.format("updateSale :%s", vouNo));
     }
@@ -540,7 +541,7 @@ public class InventoryMessageListener {
         }
     }
 
-    private void updatePurchase(String vouNo) {
+    public void updatePurchase(String vouNo) {
         purHisRepo.updatePurchase(vouNo, ACK);
         log.info(String.format("updatePurchase %s", vouNo));
     }
@@ -642,7 +643,7 @@ public class InventoryMessageListener {
         }
     }
 
-    private void updateReturnIn(String vouNo) {
+    public void updateReturnIn(String vouNo) {
         returnInRepo.updateReturnIn(vouNo, ACK);
         log.info(String.format("updateReturnIn: %s", vouNo));
     }
@@ -727,7 +728,7 @@ public class InventoryMessageListener {
         }
     }
 
-    private void updateReturnOut(String vouNo) {
+    public void updateReturnOut(String vouNo) {
         returnOutRepo.updateReturnOut(vouNo, ACK);
         log.info(String.format("updateReturnOut: %s", vouNo));
     }
@@ -1081,7 +1082,7 @@ public class InventoryMessageListener {
     }
 
 
-    private void updateOPD(String vouNo) {
+    public void updateOPD(String vouNo) {
         opdHisRepo.updateOPD(vouNo, ACK);
         log.info(String.format("updateOPD: %s", vouNo));
     }
@@ -1422,7 +1423,7 @@ public class InventoryMessageListener {
     }
 
 
-    private void updateOT(String vouNo) {
+    public void updateOT(String vouNo) {
         otHisRepo.updateOT(vouNo, ACK);
         log.info(String.format("updateOT: %s", vouNo));
     }
@@ -1514,29 +1515,29 @@ public class InventoryMessageListener {
                         } else if (serviceId == Util1.getInteger(dcPaidId) || serviceId == Util1.getInteger(dcDepositId)) {
                             //paid or deposit
                             //credit
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(Util1.isNull(accountCode, payAcc));
-                                gl.setAccCode(balAcc);
-                                gl.setDrAmt(amount);
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(Util1.getTodayDate());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setTraderCode(traderCode);
-                                gl.setDeleted(deleted);
-                                gl.setCash(true);
-                                listGl.add(gl);
+                            Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
+                            gl.setGlDate(vouDate);
+                            gl.setSrcAccCode(Util1.isNull(accountCode, payAcc));
+                            gl.setAccCode(balAcc);
+                            gl.setDrAmt(amount);
+                            gl.setRefNo(vouNo);
+                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                            gl.setMacId(MAC_ID);
+                            gl.setCreatedBy(APP_NAME);
+                            gl.setCurCode(curCode);
+                            gl.setRefNo(vouNo);
+                            gl.setDescription(serviceName);
+                            gl.setCreatedDate(Util1.getTodayDate());
+                            gl.setTranSource(tranSource);
+                            gl.setReference(reference);
+                            gl.setTraderCode(traderCode);
+                            gl.setDeleted(deleted);
+                            gl.setCash(true);
+                            listGl.add(gl);
 
                         } else if (serviceId == Util1.getInteger(dcRefundId)) {
                             //refund
@@ -1781,7 +1782,7 @@ public class InventoryMessageListener {
         }
     }
 
-    private void updateDC(String vouNo) {
+    public void updateDC(String vouNo) {
         dcHisRepo.updateDC(vouNo, ACK);
         log.info(String.format("updateDC: %s", vouNo));
     }

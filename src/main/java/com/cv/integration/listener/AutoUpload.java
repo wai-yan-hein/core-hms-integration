@@ -24,7 +24,6 @@ public class AutoUpload {
     private String syncDate;
     @Value("${upload.trader}")
     private String uploadTrader;
-
     @Value("${upload.sale}")
     private String uploadSale;
     @Value("${upload.purchase}")
@@ -107,6 +106,10 @@ public class AutoUpload {
         }
     }
 
+    private boolean isCashOnly() {
+        return Util1.getBoolean(environment.getProperty("cash.only"));
+    }
+
     private void uploadOPDSetup() {
         if (Util1.getBoolean(environment.getProperty("upload.opd.setup"))) {
             List<OPDCategory> categories = opdGroupRepo.unUploadOPDCategory();
@@ -161,7 +164,15 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadSaleVoucher: %s", vouchers.size()));
                 for (SaleHis vou : vouchers) {
-                    listener.sendSaleVoucherToAccount(vou);
+                    if (isCashOnly()) {
+                        if (vou.getVouPaid() > 0) {
+                            listener.sendSaleVoucherToAccount(vou);
+                        } else {
+                            listener.updateSale(vou.getVouNo());
+                        }
+                    } else {
+                        listener.sendSaleVoucherToAccount(vou);
+                    }
                     sleep();
                 }
             }
@@ -174,7 +185,15 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadPurchaseVoucher: %s", vouchers.size()));
                 for (PurHis vou : vouchers) {
-                    listener.sendPurchaseVoucherToAccount(vou);
+                    if (isCashOnly()) {
+                        if (vou.getVouPaid() > 0) {
+                            listener.sendPurchaseVoucherToAccount(vou);
+                        } else {
+                            listener.updatePurchase(vou.getVouNo());
+                        }
+                    } else {
+                        listener.sendPurchaseVoucherToAccount(vou);
+                    }
                     sleep();
                 }
             }
@@ -187,7 +206,15 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnInVoucher: %s", vouchers.size()));
                 for (RetInHis vou : vouchers) {
-                    listener.sendReturnInVoucherToAccount(vou);
+                    if (isCashOnly()) {
+                        if (vou.getVouPaid() > 0) {
+                            listener.sendReturnInVoucherToAccount(vou);
+                        } else {
+                            listener.updateReturnIn(vou.getVouNo());
+                        }
+                    } else {
+                        listener.sendReturnInVoucherToAccount(vou);
+                    }
                     sleep();
                 }
             }
@@ -200,7 +227,15 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnOutVoucher: %s", vouchers.size()));
                 for (RetOutHis vou : vouchers) {
-                    listener.sendReturnOutVoucherToAccount(vou);
+                    if (isCashOnly()) {
+                        if (vou.getVouPaid() > 0) {
+                            listener.sendReturnOutVoucherToAccount(vou);
+                        } else {
+                            listener.updateReturnOut(vou.getVouNo());
+                        }
+                    } else {
+                        listener.sendReturnOutVoucherToAccount(vou);
+                    }
                     sleep();
                 }
             }
@@ -213,7 +248,15 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDVoucher: %s", vouchers.size()));
                 for (OPDHis op : vouchers) {
-                    listener.sendOPDVoucherToAccount(op);
+                    if (isCashOnly()) {
+                        if (op.getVouPaid() > 0) {
+                            listener.sendOPDVoucherToAccount(op);
+                        } else {
+                            listener.updateOPD(op.getVouNo());
+                        }
+                    } else {
+                        listener.sendOPDVoucherToAccount(op);
+                    }
                     sleep();
                 }
             }
@@ -226,7 +269,15 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOTVoucher: %s", vouchers.size()));
                 for (OTHis ot : vouchers) {
-                    listener.sendOTVoucherToAccount(ot);
+                    if (isCashOnly()) {
+                        if (ot.getVouPaid() > 0) {
+                            listener.sendOTVoucherToAccount(ot);
+                        } else {
+                            listener.updateOT(ot.getVouNo());
+                        }
+                    } else {
+                        listener.sendOTVoucherToAccount(ot);
+                    }
                     sleep();
                 }
             }
@@ -239,7 +290,15 @@ public class AutoUpload {
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadDCVoucher: %s", vouchers.size()));
                 for (DCHis vou : vouchers) {
-                    listener.sendDCVoucherToAccount(vou);
+                    if (isCashOnly()) {
+                        if (vou.getVouPaid() > 0) {
+                            listener.sendDCVoucherToAccount(vou);
+                        } else {
+                            listener.updateDC(vou.getVouNo());
+                        }
+                    } else {
+                        listener.sendDCVoucherToAccount(vou);
+                    }
                     sleep();
                 }
             }

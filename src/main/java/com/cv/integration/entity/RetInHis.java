@@ -33,7 +33,7 @@ public class RetInHis implements java.io.Serializable {
     @Column(name = "balance")
     private Double vouBalance;
     @Column(name = "paid")
-    private String vouPaid;
+    private double vouPaid;
     @Column(name = "deleted")
     private boolean deleted;
     @ManyToOne

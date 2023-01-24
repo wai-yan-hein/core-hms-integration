@@ -36,7 +36,7 @@ public class SaleHis implements java.io.Serializable {
     @Column(name = "discount")
     private Double vouDiscount;
     @Column(name = "paid_amount")
-    private String vouPaid;
+    private double vouPaid;
     @Column(name = "deleted")
     private boolean deleted;
     @ManyToOne

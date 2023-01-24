@@ -24,7 +24,7 @@ public class OTHis implements java.io.Serializable {
     @Column(name = "disc_a")
     private Double vouDiscount;
     @Column(name = "paid")
-    private Double vouPaid;
+    private double vouPaid;
     @Column(name = "deleted")
     private boolean deleted;
     @ManyToOne
