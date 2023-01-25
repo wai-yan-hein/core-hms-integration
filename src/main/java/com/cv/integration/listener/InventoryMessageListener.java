@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -178,6 +177,9 @@ public class InventoryMessageListener {
 
     private void deleteGl(String tranSource, String vouNo, String srcAcc) {
         Gl gl = new Gl();
+        GlKey key = new GlKey();
+        key.setCompCode(compCode);
+        gl.setKey(key);
         gl.setTranSource(tranSource);
         gl.setRefNo(vouNo);
         gl.setSrcAccCode(srcAcc);
