@@ -346,7 +346,7 @@ public class AutoUpload {
 
     private void sleep() {
         try {
-            TimeUnit.MILLISECONDS.sleep(250);
+            TimeUnit.MILLISECONDS.sleep(10);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
