@@ -81,7 +81,7 @@ public class AutoUpload {
     private Environment environment;
     private boolean syncing = false;
 
-    @Scheduled(fixedRate = 2 * 60 * 1000)
+    @Scheduled(fixedRate = 60 * 1000)
     private void autoUpload() {
         if (!syncing) {
             log.info("autoUpload: Start");
