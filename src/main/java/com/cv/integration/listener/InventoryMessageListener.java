@@ -520,7 +520,7 @@ public class InventoryMessageListener {
                     gl.setAccCode(srcAcc);
                     gl.setCrAmt(vouPaidAmt);
                     gl.setCurCode(curCode);
-                    gl.setReference(reference);
+                    gl.setReference(trader.getTraderName());
                     gl.setDeptCode(deptCode);
                     gl.setCreatedDate(Util1.getTodayDate());
                     gl.setCreatedBy(APP_NAME);
@@ -762,6 +762,8 @@ public class InventoryMessageListener {
                 double vouDisAmt = Util1.getDouble(oh.getVouDiscount());
                 double vouBalAmt = Util1.getDouble(oh.getVouBalance());
                 boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
+                AccountSetting sett = hmAccSetting.get("RETURN_IN");
+                String retAcc = sett.getSourceAcc();
                 Integer paymentId = oh.getPaymentId();
                 List<Gl> listGl = new ArrayList<>();
                 List<OPDHisDetail> listOPD = opdHisDetailRepo.search(vouNo);
@@ -797,22 +799,28 @@ public class InventoryMessageListener {
                             key.setDeptId(1);
                             key.setCompCode(compCode);
                             gl.setKey(key);
-                            gl.setAccCode(srcAcc);
                             //cash
                             if (paymentId == 1) {
+                                if (amount > 0) {
+                                    gl.setAccCode(srcAcc);
+                                    gl.setDrAmt(amount);
+                                } else {
+                                    gl.setAccCode(retAcc);
+                                    gl.setCrAmt(amount * -1);
+                                }
                                 gl.setSrcAccCode(payAcc);
                                 gl.setCash(true);
                             } else {
                                 //credit
-                                gl.setSrcAccCode(balAcc);
+                                if (amount > 0) {
+                                    gl.setAccCode(srcAcc);
+                                    gl.setDrAmt(amount);
+                                } else {
+                                    gl.setAccCode(retAcc);
+                                    gl.setCrAmt(amount * -1);
+                                }
                                 gl.setTraderCode(traderCode);
-                            }
-                            if (amount > 0) {
-                                gl.setDrAmt(amount);
-                            } else {
-                                AccountSetting sett = hmAccSetting.get("RETURN_IN");
-                                gl.setSrcAccCode(sett.getSourceAcc());
-                                gl.setCrAmt(amount);
+                                gl.setSrcAccCode(balAcc);
                             }
                             gl.setGlDate(vouDate);
                             gl.setRefNo(vouNo);

@@ -249,7 +249,7 @@ public class AutoUpload {
                 log.info(String.format("uploadOPDVoucher: %s", vouchers.size()));
                 for (OPDHis op : vouchers) {
                     if (isCashOnly()) {
-                        if (op.getVouPaid() > 0) {
+                        if (op.getVouPaid() != 0) {
                             listener.sendOPDVoucherToAccount(op);
                         } else {
                             listener.updateOPD(op.getVouNo());
