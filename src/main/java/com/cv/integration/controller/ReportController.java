@@ -7,7 +7,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,32 +29,32 @@ public class ReportController {
         return ResponseEntity.ok(Util1.writeJsonFile(values, exportPath));
     }
 
-    @RequestMapping("/get-purchase")
+    @PostMapping("/get-purchase")
     public ResponseEntity<List<Voucher>> getPurchaseVoucher(@RequestParam String vouNo) throws SQLException {
         return ResponseEntity.ok(reportService.getPurchaseVoucher(vouNo));
     }
 
-    @RequestMapping("/get-returnIn")
+    @PostMapping("/get-returnIn")
     public ResponseEntity<List<Voucher>> getReturnInVoucher(@RequestParam String vouNo) throws SQLException {
         return ResponseEntity.ok(reportService.getReturnInVoucher(vouNo));
     }
 
-    @RequestMapping("/get-returnOut")
+    @PostMapping("/get-returnOut")
     public ResponseEntity<List<Voucher>> getReturnOutVoucher(@RequestParam String vouNo) throws SQLException {
         return ResponseEntity.ok(reportService.getReturnOutVoucher(vouNo));
     }
 
-    @RequestMapping("/get-opd")
+    @PostMapping("/get-opd")
     public ResponseEntity<List<Voucher>> getOPDVoucher(@RequestParam String vouNo) throws SQLException {
         return ResponseEntity.ok(reportService.getOPDVoucher(vouNo));
     }
 
-    @RequestMapping("/get-ot")
+    @PostMapping("/get-ot")
     public ResponseEntity<List<Voucher>> getOTVoucher(@RequestParam String vouNo) throws SQLException {
         return ResponseEntity.ok(reportService.getOTVoucher(vouNo));
     }
 
-    @RequestMapping("/get-dc")
+    @PostMapping("/get-dc")
     public ResponseEntity<List<Voucher>> getDCVoucher(@RequestParam String vouNo) throws SQLException {
         return ResponseEntity.ok(reportService.getDCVoucher(vouNo));
     }
