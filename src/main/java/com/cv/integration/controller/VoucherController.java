@@ -116,8 +116,8 @@ public class VoucherController {
     }
 
     @PostMapping("/payment")
-    private ResponseEntity<?> paymentVoucher(@RequestParam Integer payId) {
-        Optional<PaymentHis> option = paymentHisRepo.findById(payId);
+    private ResponseEntity<?> paymentVoucher(@RequestParam String payId) {
+        Optional<PaymentHis> option = paymentHisRepo.findById(Integer.parseInt(payId));
         if (option.isPresent()) {
             integration.sendPaymentToAcc(option.get());
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
@@ -126,8 +126,8 @@ public class VoucherController {
     }
 
     @PostMapping("/expense")
-    private ResponseEntity<?> expenseVoucher(@RequestParam Integer expId) {
-        Optional<GenExpense> option = expenseRepo.findById(expId);
+    private ResponseEntity<?> expenseVoucher(@RequestParam String expId) {
+        Optional<GenExpense> option = expenseRepo.findById(Integer.parseInt(expId));
         if (option.isPresent()) {
             integration.sendGeneralExpenseToAcc(option.get());
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
@@ -136,8 +136,8 @@ public class VoucherController {
     }
 
     @PostMapping("/opdReceive")
-    private ResponseEntity<?> opdReceive(@RequestParam Integer id) {
-        Optional<OPDReceive> option = opdReceiveRepo.findById(id);
+    private ResponseEntity<?> opdReceive(@RequestParam String id) {
+        Optional<OPDReceive> option = opdReceiveRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendOPDReceiveToAccount(option.get());
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
@@ -146,8 +146,8 @@ public class VoucherController {
     }
 
     @PostMapping("/opdCategory")
-    private ResponseEntity<?> opdCategory(@RequestParam Integer id) {
-        Optional<OPDCategory> option = opdCategoryRepo.findById(id);
+    private ResponseEntity<?> opdCategory(@RequestParam String id) {
+        Optional<OPDCategory> option = opdCategoryRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendOPDGroup(option.get());
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
@@ -156,8 +156,8 @@ public class VoucherController {
     }
 
     @PostMapping("/otGroup")
-    private ResponseEntity<?> otGroup(@RequestParam Integer id) {
-        Optional<OTGroup> option = otGroupRepo.findById(id);
+    private ResponseEntity<?> otGroup(@RequestParam String id) {
+        Optional<OTGroup> option = otGroupRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendOTGroup(option.get());
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
@@ -166,8 +166,8 @@ public class VoucherController {
     }
 
     @PostMapping("/dcGroup")
-    private ResponseEntity<?> dcGroup(@RequestParam Integer id) {
-        Optional<DCGroup> option = dcGroupRepo.findById(id);
+    private ResponseEntity<?> dcGroup(@RequestParam String id) {
+        Optional<DCGroup> option = dcGroupRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendDCGroup(option.get());
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
