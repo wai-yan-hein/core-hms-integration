@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,8 +46,14 @@ public class VoucherController {
     @Autowired
     private DCGroupRepo dcGroupRepo;
 
+    @GetMapping("/apiTest")
+    private  ResponseEntity<?> test(){
+        log.info("/apiTest");
+        return ResponseEntity.status(HttpStatus.FOUND).body("OK");
+    }
     @PostMapping("/sale")
     private ResponseEntity<?> saleVoucher(@RequestParam String vouNo) {
+        log.info("/sale : " + vouNo);
         Optional<SaleHis> option = saleHisRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendSaleVoucherToAccount(option.get());
@@ -57,6 +64,7 @@ public class VoucherController {
 
     @PostMapping("/purchase")
     private ResponseEntity<?> purchaseVoucher(@RequestParam String vouNo) {
+        log.info("/Purchase : " + vouNo);
         Optional<PurHis> option = purHisRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendPurchaseVoucherToAccount(option.get());
@@ -67,6 +75,7 @@ public class VoucherController {
 
     @PostMapping("/returnIn")
     private ResponseEntity<?> retInVoucher(@RequestParam String vouNo) {
+        log.info("/returnIn : " + vouNo);
         Optional<RetInHis> option = returnInRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendReturnInVoucherToAccount(option.get());
@@ -77,6 +86,7 @@ public class VoucherController {
 
     @PostMapping("/returnOut")
     private ResponseEntity<?> retOutVoucher(@RequestParam String vouNo) {
+        log.info("/returnOut : " + vouNo);
         Optional<RetOutHis> option = returnOutRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendReturnOutVoucherToAccount(option.get());
@@ -87,6 +97,7 @@ public class VoucherController {
 
     @PostMapping("/opd")
     private ResponseEntity<?> opdVoucher(@RequestParam String vouNo) {
+        log.info("/opd : " + vouNo);
         Optional<OPDHis> option = opdHisRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendOPDVoucherToAccount(option.get());
@@ -97,6 +108,7 @@ public class VoucherController {
 
     @PostMapping("/dc")
     private ResponseEntity<?> dcVoucher(@RequestParam String vouNo) {
+        log.info("/dc : " + vouNo);
         Optional<DCHis> option = dcHisRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendDCVoucherToAccount(option.get());
@@ -107,6 +119,7 @@ public class VoucherController {
 
     @PostMapping("/ot")
     private ResponseEntity<?> otVoucher(@RequestParam String vouNo) {
+        log.info("/ot : " + vouNo);
         Optional<OTHis> option = otHisRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendOTVoucherToAccount(option.get());
@@ -117,6 +130,7 @@ public class VoucherController {
 
     @PostMapping("/payment")
     private ResponseEntity<?> paymentVoucher(@RequestParam String payId) {
+        log.info("/payment : " + payId);
         Optional<PaymentHis> option = paymentHisRepo.findById(Integer.parseInt(payId));
         if (option.isPresent()) {
             integration.sendPaymentToAcc(option.get());
@@ -127,6 +141,7 @@ public class VoucherController {
 
     @PostMapping("/expense")
     private ResponseEntity<?> expenseVoucher(@RequestParam String expId) {
+        log.info("/expense : " + expId);
         Optional<GenExpense> option = expenseRepo.findById(Integer.parseInt(expId));
         if (option.isPresent()) {
             integration.sendGeneralExpenseToAcc(option.get());
@@ -137,6 +152,7 @@ public class VoucherController {
 
     @PostMapping("/opdReceive")
     private ResponseEntity<?> opdReceive(@RequestParam String id) {
+        log.info("/opdReceive : " + id);
         Optional<OPDReceive> option = opdReceiveRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendOPDReceiveToAccount(option.get());
@@ -147,6 +163,7 @@ public class VoucherController {
 
     @PostMapping("/opdCategory")
     private ResponseEntity<?> opdCategory(@RequestParam String id) {
+        log.info("/opdCategory : " + id);
         Optional<OPDCategory> option = opdCategoryRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendOPDGroup(option.get());
@@ -157,6 +174,7 @@ public class VoucherController {
 
     @PostMapping("/otGroup")
     private ResponseEntity<?> otGroup(@RequestParam String id) {
+        log.info("/otGroup : " + id);
         Optional<OTGroup> option = otGroupRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendOTGroup(option.get());
@@ -167,6 +185,7 @@ public class VoucherController {
 
     @PostMapping("/dcGroup")
     private ResponseEntity<?> dcGroup(@RequestParam String id) {
+        log.info("/dcGroup : " + id);
         Optional<DCGroup> option = dcGroupRepo.findById(Integer.parseInt(id));
         if (option.isPresent()) {
             integration.sendDCGroup(option.get());
