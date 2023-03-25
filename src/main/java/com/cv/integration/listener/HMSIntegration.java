@@ -323,17 +323,19 @@ public class HMSIntegration {
                 String vouNo = sh.getVouNo();
                 if (vouStatusId == 1) {
                     String srcAcc = setting.getSourceAcc();
+                    String ipdSrc = setting.getIpdSource();
                     String payAcc = setting.getPayAcc();
                     String disAcc = setting.getDiscountAcc();
                     String balAcc = setting.getBalanceAcc();
                     String deptCode = setting.getDeptCode();
-                    String ipdSrc = setting.getIpdSource();
                     Date vouDate = Util1.toMySqlDate(sh.getVouDate());
                     String traderCode = null;
                     String reference = null;
                     String accCodeByLoc = sh.getLocation().getAccCode();
                     String deptCodeByLoc = sh.getLocation().getDeptCode();
                     String traderByLoc = sh.getLocation().getTraderCode();
+                    boolean admission = !Util1.isNullOrEmpty(sh.getAdmissionNo());
+                    srcAcc = admission ? ipdSrc : srcAcc;
                     srcAcc = Util1.isNull(accCodeByLoc, srcAcc);
                     deptCode = Util1.isNull(deptCodeByLoc, deptCode);
                     String patientType = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
@@ -357,7 +359,6 @@ public class HMSIntegration {
                     double vouPaidAmt = Util1.getDouble(sh.getVouPaid());
                     double vouDisAmt = Util1.getDouble(sh.getVouDiscount());
                     double vouBalAmt = Util1.getDouble(sh.getVouBalance());
-                    boolean admission = !Util1.isNullOrEmpty(sh.getAdmissionNo());
                     List<Gl> listGl = new ArrayList<>();
                     //income
                     if (vouBalAmt > 0) {
@@ -368,7 +369,7 @@ public class HMSIntegration {
                         gl.setKey(key);
                         gl.setGlDate(vouDate);
                         gl.setDescription("Sale Voucher Total");
-                        gl.setSrcAccCode(admission ? Util1.isNull(ipdSrc, srcAcc) : srcAcc);
+                        gl.setSrcAccCode(srcAcc);
                         gl.setDeptCode(deptCode);
                         gl.setAccCode(balAcc);
                         gl.setTraderCode(traderCode);
@@ -553,7 +554,6 @@ public class HMSIntegration {
             String tranSource = "RETURN_IN";
             AccountSetting setting = hmAccSetting.get(tranSource);
             if (!Objects.isNull(setting)) {
-
                 String vouNo = ri.getVouNo();
                 String srcAcc = setting.getSourceAcc();
                 String payAcc = setting.getPayAcc();
