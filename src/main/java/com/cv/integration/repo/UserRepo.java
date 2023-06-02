@@ -22,20 +22,14 @@ public class UserRepo {
 
     public String getProperty(String key, String compCode) {
         if (hmKey.isEmpty()) {
-            Mono<ResponseEntity<List<SystemProperty>>> result = userApi.get()
-                    .uri(builder -> builder.path("/user/get-system-property")
+            Mono<List<SystemProperty>> result = userApi.get().uri(builder -> builder.path("/user/get-system-property")
                             .queryParam("compCode", compCode)
                             .build())
-                    .retrieve().toEntityList(SystemProperty.class);
-            ResponseEntity<List<SystemProperty>> block = result.block();
-            if (block != null) {
-                List<SystemProperty> list = block.getBody();
-                if (list != null) {
-                    for (SystemProperty s : list) {
-                        hmKey.put(s.getKey().getPropKey(), s.getPropValue());
-                    }
-                }
-            }
+                    .retrieve().bodyToFlux(SystemProperty.class)
+                    .collectList();
+            List<SystemProperty> list = result.block();
+            assert list != null;
+            list.forEach(s -> hmKey.put(s.getKey().getPropKey(), s.getPropValue()));
         }
         return hmKey.get(key);
     }

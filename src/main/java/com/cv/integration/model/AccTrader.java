@@ -11,7 +11,7 @@ public class AccTrader implements java.io.Serializable {
     private String appName;
     private Boolean active;
     private String traderType;
-    private String accCode;
+    private String account;
     private String accountName;
     private String accountParent;
     private String groupCode;

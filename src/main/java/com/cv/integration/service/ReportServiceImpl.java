@@ -9,24 +9,26 @@ import lombok.extern.slf4j.Slf4j;
 import org.hibernate.SessionFactory;
 import org.hibernate.jdbc.Work;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
 @Service
-@Transactional("hibernate")
+@Transactional
 @Slf4j
 public class ReportServiceImpl implements ReportService {
     @Autowired
-    private SessionFactory sessionFactory;
-    private ResultSet rs = null;
+    private JdbcTemplate jdbcTemplate;
 
     @Override
     public List<Voucher> getSaleVoucher(String vouNo) throws SQLException {
@@ -39,7 +41,7 @@ public class ReportServiceImpl implements ReportService {
                 "join vou_status vs on v.vou_status = vs.vou_status_id\n" +
                 "join appuser a on v.created_by = a.user_id\n" +
                 "where sale_inv_id = '" + vouNo + "'";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         if (!Objects.isNull(rs)) {
             while (rs.next()) {
                 Voucher v = new Voucher();
@@ -80,7 +82,7 @@ public class ReportServiceImpl implements ReportService {
                 "from v_purchase v join appuser a on v.created_by = a.user_id\n" +
                 "join location l on v.location = l.location_id\n" +
                 "where pur_inv_id = '" + vouNo + "'";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         if (!Objects.isNull(rs)) {
             while (rs.next()) {
                 Voucher v = new Voucher();
@@ -119,7 +121,7 @@ public class ReportServiceImpl implements ReportService {
                 "join location l on v.location = l.location_id\n" +
                 "join patient_detail pd on v.reg_no = pd.reg_no\n" +
                 "where ret_in_id = '" + vouNo + "'";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         if (!Objects.isNull(rs)) {
             while (rs.next()) {
                 Voucher v = new Voucher();
@@ -151,7 +153,7 @@ public class ReportServiceImpl implements ReportService {
                 "from v_return_out v join appuser a on v.created_by = a.user_id\n" +
                 "join location l on v.location = l.location_id\n" +
                 "where ret_out_id = '" + vouNo + "'";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         if (!Objects.isNull(rs)) {
             while (rs.next()) {
                 Voucher v = new Voucher();
@@ -181,7 +183,7 @@ public class ReportServiceImpl implements ReportService {
         String sql = "select v.*,a.user_name\n" +
                 "from v_opd v join appuser a on v.created_by = a.user_id\n" +
                 "where opd_inv_id = '" + vouNo + "'";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         if (!Objects.isNull(rs)) {
             while (rs.next()) {
                 Voucher v = new Voucher();
@@ -213,7 +215,7 @@ public class ReportServiceImpl implements ReportService {
         String sql = "select v.*,a.user_name\n" +
                 "from v_ot v join appuser a on v.created_by = a.user_id\n" +
                 "where ot_inv_id = '" + vouNo + "'";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         if (!Objects.isNull(rs)) {
             while (rs.next()) {
                 Voucher v = new Voucher();
@@ -245,7 +247,7 @@ public class ReportServiceImpl implements ReportService {
         String sql = "select v.*,a.user_name\n" +
                 "from v_dc v join appuser a on v.created_by = a.user_id\n" +
                 "where dc_inv_id = '" + vouNo + "'";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         if (!Objects.isNull(rs)) {
             while (rs.next()) {
                 Voucher v = new Voucher();
@@ -276,7 +278,7 @@ public class ReportServiceImpl implements ReportService {
         List<PatientInfo> infos = new ArrayList<>();
         String sql = "select p.*,c.city_name,d.doctor_name from patient_detail p left join city c on p.city_id = c.city_id\n" +
                 "left join doctor d on p.doctor_id = d.doctor_id";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         //reg_no, reg_date, dob, sex, father_name, nirc, city_id, nationality, religion, doctor_id,
         // patient_name, address, contactno, created_by, age, admission_no, township_id,
         // pt_type, ot_id, age_str, month, day, regno_h2
@@ -385,7 +387,7 @@ public class ReportServiceImpl implements ReportService {
                 ")a\n" +
                 "where amt <> 0\n" +
                 "group by reg_no,currency_id\n";
-        ResultSet rs = exeSql(sql);
+        ResultSet rs = getResult(sql);
         try {
             while (rs.next()) {
                 String amsNo = rs.getString("admission_no");
@@ -402,16 +404,10 @@ public class ReportServiceImpl implements ReportService {
     }
 
 
-    public ResultSet exeSql(final String sql) {
-        Work work = (Connection con) -> {
-            try {
-                rs = null;
-                rs = con.prepareStatement(sql).executeQuery();
-            } catch (SQLException ex) {
-                log.error("getResultSet : " + sql + " : " + ex.getMessage());
-            }
-        };
-        sessionFactory.getCurrentSession().doWork(work);
-        return rs;
+    public ResultSet getResult(String sql) {
+        return jdbcTemplate.execute((ConnectionCallback<ResultSet>) con -> {
+            Statement stmt = con.createStatement();
+            return stmt.executeQuery(sql);
+        });
     }
 }

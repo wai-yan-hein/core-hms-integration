@@ -12,7 +12,7 @@ import java.util.Date;
 import java.util.List;
 
 public interface TraderOpeningRepo extends JpaRepository<TraderOpening, TraderOpeningKey> {
-    @Query("select o from TraderOpening o where o.intgUpdStatus is null and date(o.key.opDate) >= :vou_date")
+    @Query("select o from TraderOpening o where o.intgUpdStatus is null and date(o.key.opDate) = :vou_date")
     List<TraderOpening> unUploadVoucher(@Param("vou_date") Date syncDate);
 
     @Transactional

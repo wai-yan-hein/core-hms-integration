@@ -25,70 +25,28 @@ import java.util.Objects;
 import java.util.Properties;
 
 
-@Configuration
-@EnableTransactionManagement
-@PropertySource(value = {"file:config/application.properties"})
-@EnableAutoConfiguration(exclude = {HibernateJpaAutoConfiguration.class})
+//@Configuration
+//@EnableTransactionManagement
+//@PropertySource(value = {"file:config/application.properties"})
+//@EnableAutoConfiguration(exclude = {HibernateJpaAutoConfiguration.class})
 @Slf4j
 public class JPAConfig {
     @Autowired
-    private Environment env;
+    private DataSource dataSource;
 
-    @Bean
-    public LocalSessionFactoryBean sessionFactory() {
-        LocalSessionFactoryBean sessionFactory = new LocalSessionFactoryBean();
-        sessionFactory.setDataSource(dataSource());
-        sessionFactory.setPackagesToScan("com.cv.integration.entity");
-        sessionFactory.setHibernateProperties(additionalProperties());
-        log.info("sessionFactory");
-        return sessionFactory;
-    }
-
-    @Bean("hibernate")
-    public PlatformTransactionManager platformTransactionManager() {
-        final HibernateTransactionManager transactionManager = new HibernateTransactionManager();
-        transactionManager.setSessionFactory(this.sessionFactory().getObject());
-        return transactionManager;
-    }
-
-    // beans
     @Bean
     public LocalContainerEntityManagerFactoryBean entityManagerFactory() {
-        final LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
-        em.setDataSource(dataSource());
-        em.setPackagesToScan("com.cv.integration.entity");
-        final JpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
-        em.setJpaVendorAdapter(vendorAdapter);
-        em.setJpaProperties(additionalProperties());
-        return em;
+        LocalContainerEntityManagerFactoryBean entityManagerFactory = new LocalContainerEntityManagerFactoryBean();
+        entityManagerFactory.setDataSource(dataSource);
+        entityManagerFactory.setPackagesToScan("com.cv.integration.entity");
+        entityManagerFactory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+        return entityManagerFactory;
     }
+
     @Bean
-    public DataSource dataSource() {
-        final DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName(Preconditions.checkNotNull(Objects.requireNonNull(env.getProperty("jdbc.driverClassName"))));
-        dataSource.setUrl(Preconditions.checkNotNull(Objects.requireNonNull(env.getProperty("jdbc.url"))));
-        dataSource.setUsername(Preconditions.checkNotNull(Objects.requireNonNull(env.getProperty("jdbc.user"))));
-        dataSource.setPassword(Preconditions.checkNotNull(Objects.requireNonNull(env.getProperty("jdbc.pass"))));
-        return dataSource;
-    }
-    @Bean
-    public PlatformTransactionManager transactionManager() {
-        final JpaTransactionManager transactionManager = new JpaTransactionManager();
+    public JpaTransactionManager transactionManager() {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
         transactionManager.setEntityManagerFactory(entityManagerFactory().getObject());
         return transactionManager;
-    }
-
-    @Bean
-    public PersistenceExceptionTranslationPostProcessor exceptionTranslation() {
-        return new PersistenceExceptionTranslationPostProcessor();
-    }
-
-    final Properties additionalProperties() {
-        final Properties hibernateProperties = new Properties();
-        //hibernateProperties.setProperty("hibernate.hbm2ddl.auto", env.getProperty("hibernate.hbm2ddl.auto"));
-        hibernateProperties.setProperty("hibernate.dialect", env.getProperty("hibernate.dialect"));
-        hibernateProperties.setProperty("hibernate.cache.use_second_level_cache", "false");
-
-        return hibernateProperties;
     }
 }

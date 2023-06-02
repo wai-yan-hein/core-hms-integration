@@ -166,12 +166,14 @@ public class HMSIntegration {
     }
 
     public String saveCOA(ChartOfAccount coa) {
-        Mono<String> result = accountApi.post()
-                .uri("/account/process-coa")
-                .body(Mono.just(coa), ChartOfAccount.class)
-                .retrieve()
-                .bodyToMono(String.class);
+        Mono<String> result = accountApi.post().uri("/account/process-coa").body(Mono.just(coa), ChartOfAccount.class).retrieve().bodyToMono(String.class);
         return result.block(Duration.ofMinutes(1));
+    }
+
+    public void saveOpening(COAOpening op) {
+        op = accountApi.post().uri("/account/save-opening").body(Mono.just(op), COAOpening.class).retrieve().bodyToMono(COAOpening.class).block();
+        assert op != null;
+        updateOpening(op.getTraderCode());
     }
 
 
@@ -183,12 +185,14 @@ public class HMSIntegration {
         gl.setTranSource(tranSource);
         gl.setRefNo(vouNo);
         gl.setSrcAccCode(srcAcc);
-        Mono<String> result = accountApi.post()
-                .uri("/account/delete-gl-by-voucher")
-                .body(Mono.just(gl), Gl.class)
-                .retrieve()
-                .bodyToMono(String.class);
-        result.block(Duration.ofMinutes(1));
+        if (srcAcc != null) {
+            accountApi.post().uri("/account/delete-gl-by-account").body(Mono.just(gl), Gl.class).retrieve().bodyToMono(String.class).subscribe((t) -> {
+            }, (e) -> log.info(e.getMessage()));
+        } else {
+            accountApi.post().uri("/account/delete-gl-by-voucher").body(Mono.just(gl), Gl.class).retrieve().bodyToMono(String.class).subscribe((t) -> {
+            }, (e) -> log.info(e.getMessage()));
+        }
+
     }
 
 
@@ -235,11 +239,13 @@ public class HMSIntegration {
         String type = trader.getTraderType();
         double opAmt = op.getAmount();
         COAOpening opening = new COAOpening();
+        OpeningKey key = new OpeningKey();
+        key.setCompCode(compCode);
+        opening.setKey(key);
         opening.setOpDate(op.getKey().getOpDate());
         opening.setTraderCode(op.getKey().getTrader().getTraderCode());
-        opening.setCompCode(compCode);
         opening.setCurCode(op.getKey().getCurCode());
-        opening.setDepCode(deptCode);
+        opening.setDeptCode(deptCode);
         if (type.equals("C")) {
             if (opAmt > 0) {
                 opening.setCrAmt(0.0);
@@ -258,53 +264,47 @@ public class HMSIntegration {
             }
         }
         opening.setCreatedDate(Util1.getTodayDate());
-        //sendMessage("OPENING", "OPENING", gson.toJson(opening));
-        log.info(String.format("sendTraderOpening: %s", trader.getTraderCode()));
+        saveOpening(opening);
     }
 
     public void sendTrader(Trader t) {
         if (Util1.getBoolean(uploadTrader)) {
-            if (t != null) {
-                if (t.isActive()) {
-                    String traderType = t.getTraderType();
-                    String code = t.getTraderCode();
-                    AccTrader accTrader = new AccTrader();
-                    TraderKey key = new TraderKey();
-                    key.setCode(code);
-                    key.setCompCode(compCode);
-                    accTrader.setKey(key);
-                    String userCode = t.getUserCode();
-                    accTrader.setTraderName(t.getTraderName());
-                    accTrader.setUserCode(Util1.isNull(userCode, code));
-                    accTrader.setActive(true);
-                    accTrader.setAppName(APP_NAME);
-                    accTrader.setMacId(MAC_ID);
-                    accTrader.setCreatedBy(APP_NAME);
-                    accTrader.setTraderType(traderType);
-                    accTrader.setAccCode(traderType.equals("C") ? getCustomerAcc() : getSupplierAcc());
-                    try {
-                        Mono<AccTrader> result = accountApi.post()
-                                .uri("/account/save-trader")
-                                .body(Mono.just(accTrader), AccTrader.class)
-                                .retrieve().bodyToMono(AccTrader.class)
-                                .doOnError((e) -> log.error(e.getMessage()));
-                        AccTrader trader = result.block();
-                        assert trader != null;
-                        updateTrader(t.getTraderCode());
-                    } catch (Exception e) {
-                        log.error("sendTrader : " + e.getMessage());
-                    }
+            if (t.isActive()) {
+                String traderType = t.getTraderType();
+                String code = t.getTraderCode();
+                AccTrader accTrader = new AccTrader();
+                TraderKey key = new TraderKey();
+                key.setCode(code);
+                key.setCompCode(compCode);
+                accTrader.setKey(key);
+                String userCode = t.getUserCode();
+                accTrader.setTraderName(t.getTraderName());
+                accTrader.setUserCode(Util1.isNull(userCode, code));
+                accTrader.setActive(true);
+                accTrader.setAppName(APP_NAME);
+                accTrader.setMacId(MAC_ID);
+                accTrader.setCreatedBy(APP_NAME);
+                accTrader.setTraderType(traderType);
+                accTrader.setAccount(traderType.equals("C") ? getCustomerAcc() : getSupplierAcc());
+                try {
+                    Mono<AccTrader> result = accountApi.post().uri("/account/save-trader").body(Mono.just(accTrader), AccTrader.class).retrieve().bodyToMono(AccTrader.class).doOnError((e) -> log.error(e.getMessage()));
+                    AccTrader trader = result.block();
+                    assert trader != null;
+                    updateTrader(t.getTraderCode());
+                } catch (Exception e) {
+                    log.error("sendTrader : " + e.getMessage());
                 }
             }
+
         }
     }
 
     private String getCustomerAcc() {
-        return userRepo.getProperty("customer.account", compCode);
+        return userRepo.getProperty("debtor.account", compCode);
     }
 
     private String getSupplierAcc() {
-        return userRepo.getProperty("supplier.account", compCode);
+        return userRepo.getProperty("creditor.account", compCode);
     }
 
 
@@ -335,7 +335,7 @@ public class HMSIntegration {
                     String deptCodeByLoc = sh.getLocation().getDeptCode();
                     String traderByLoc = sh.getLocation().getTraderCode();
                     boolean admission = !Util1.isNullOrEmpty(sh.getAdmissionNo());
-                    srcAcc = admission ? ipdSrc : srcAcc;
+                    srcAcc = admission ? Util1.isNull(ipdSrc, srcAcc) : srcAcc;
                     srcAcc = Util1.isNull(accCodeByLoc, srcAcc);
                     deptCode = Util1.isNull(deptCodeByLoc, deptCode);
                     String patientType = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
@@ -471,7 +471,6 @@ public class HMSIntegration {
                 Date vouDate = Util1.toMySqlDate(ph.getVouDate());
                 String curCode = ph.getCurrency().getAccCurCode();
                 boolean deleted = ph.isDeleted();
-                double vouTotalAmt = Util1.getDouble(ph.getVouTotal());
                 double vouPaidAmt = Util1.getDouble(ph.getVouPaid());
                 double vouBalAmt = Util1.getDouble(ph.getVouBalance());
                 Trader trader = ph.getTrader();
@@ -506,8 +505,6 @@ public class HMSIntegration {
                     gl.setMacId(MAC_ID);
                     listGl.add(gl);
                 }
-                //discount
-
                 //payment
                 if (vouPaidAmt > 0) {
                     Gl gl = new Gl();
@@ -798,25 +795,17 @@ public class HMSIntegration {
                             key.setCompCode(compCode);
                             gl.setKey(key);
                             //cash
+                            gl.setAccCode(srcAcc);
+                            if (amount > 0) {
+                                gl.setDrAmt(amount);
+                            } else {
+                                gl.setCrAmt(amount * -1);
+                            }
                             if (paymentId == 1) {
-                                if (amount > 0) {
-                                    gl.setAccCode(srcAcc);
-                                    gl.setDrAmt(amount);
-                                } else {
-                                    gl.setAccCode(srcAcc);
-                                    gl.setCrAmt(amount * -1);
-                                }
                                 gl.setSrcAccCode(payAcc);
                                 gl.setCash(true);
                             } else {
                                 //credit
-                                if (amount > 0) {
-                                    gl.setAccCode(srcAcc);
-                                    gl.setDrAmt(amount);
-                                } else {
-                                    gl.setAccCode(srcAcc);
-                                    gl.setCrAmt(amount * -1);
-                                }
                                 gl.setTraderCode(traderCode);
                                 gl.setSrcAccCode(balAcc);
                             }
@@ -1079,6 +1068,7 @@ public class HMSIntegration {
                         opdHisRepo.updateOPD(vouNo, FOC);
                     }
                 } else {
+                    deleteGl(tranSource, vouNo, null);
                     opdHisRepo.updateOPD(vouNo, ERR);
                 }
 
@@ -1220,8 +1210,13 @@ public class HMSIntegration {
                             key.setCompCode(compCode);
                             gl.setKey(key);
                             gl.setGlDate(vouDate);
-                            gl.setSrcAccCode(Util1.isNull(opdAcc, payAcc));
-                            gl.setAccCode(balAcc);
+                            gl.setSrcAccCode(payAcc);
+                            if (!Util1.isNullOrEmpty(opdAcc)) {
+                                gl.setAccCode(opdAcc);
+                            } else {
+                                gl.setAccCode(balAcc);
+                                gl.setTraderCode(traderCode);
+                            }
                             gl.setCrAmt(amount);
                             gl.setRefNo(vouNo);
                             gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1248,19 +1243,18 @@ public class HMSIntegration {
                                 key.setCompCode(compCode);
                                 gl.setKey(key);
                                 gl.setAccCode(srcAcc);
-                                //cash
                                 if (paymentId == 1) {
                                     gl.setSrcAccCode(payAcc);
                                     gl.setCash(true);
                                 } else {
-                                    gl.setSrcAccCode(balAcc);
+                                    //credit
                                     gl.setTraderCode(traderCode);
+                                    gl.setSrcAccCode(balAcc);
                                 }
                                 if (amount > 0) {
                                     gl.setDrAmt(amount);
                                 } else {
-                                    gl.setAccCode(srcAcc);
-                                    gl.setCrAmt(amount);
+                                    gl.setCrAmt(amount * -1);
                                 }
                                 gl.setGlDate(vouDate);
                                 gl.setRefNo(vouNo);
@@ -1554,8 +1548,13 @@ public class HMSIntegration {
                             key.setCompCode(compCode);
                             gl.setKey(key);
                             gl.setGlDate(vouDate);
-                            gl.setSrcAccCode(Util1.isNull(accountCode, payAcc));
-                            gl.setAccCode(balAcc);
+                            gl.setSrcAccCode(payAcc);
+                            if (!Util1.isNullOrEmpty(accountCode)) {
+                                gl.setAccCode(accountCode);
+                            } else {
+                                gl.setAccCode(balAcc);
+                                gl.setTraderCode(traderCode);
+                            }
                             gl.setCrAmt(amount);
                             gl.setRefNo(vouNo);
                             gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1608,20 +1607,20 @@ public class HMSIntegration {
                                 key.setCompCode(compCode);
                                 gl.setKey(key);
                                 gl.setAccCode(srcAcc);
-                                //cash
                                 if (paymentId == 1) {
                                     gl.setSrcAccCode(payAcc);
                                     gl.setCash(true);
                                 } else {
-                                    gl.setSrcAccCode(balAcc);
+                                    //credit
                                     gl.setTraderCode(traderCode);
+                                    gl.setSrcAccCode(balAcc);
                                 }
                                 if (amount > 0) {
                                     gl.setDrAmt(amount);
                                 } else {
-                                    gl.setAccCode(srcAcc);
-                                    gl.setCrAmt(amount);
+                                    gl.setCrAmt(amount * -1);
                                 }
+
                                 gl.setGlDate(vouDate);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1884,7 +1883,7 @@ public class HMSIntegration {
             String srcAcc = ge.getSrcAcc();
             String account = ge.getAccount();
             String depCode = ge.getDeptCode();
-            String curCode = ge.getCurrency().getAccCurCode();
+            String curCode = ge.getCurrency() == null ? "MMK" : ge.getCurrency().getAccCurCode();
             String expenseId = ge.getGenId().toString();
             double expAmt = ge.getExpAmt();
             boolean deleted = ge.isDeleted();
@@ -1950,8 +1949,8 @@ public class HMSIntegration {
                 }
                 Integer payId = pay.getPayId();
                 Date payDate = Util1.toMySqlDate(pay.getPayDate());
-                double payAmt = Util1.getDouble(pay.getPayAmt());
                 double discount = Util1.getDouble(pay.getDiscount());
+                double payAmt = Util1.getDouble(pay.getPayAmt());
                 boolean deleted = pay.isDeleted();
                 String curCode = pay.getCurrency().getAccCurCode();
                 String traderCode = pay.getTrader().getTraderCode();
@@ -2010,20 +2009,18 @@ public class HMSIntegration {
                     if (pay.getTrader().getTraderType().equals("C")) {
                         gl.setSrcAccCode(cusDisAcc);
                         gl.setAccCode(cusBalAcc);
-                        gl.setCrAmt(discount);
+                        gl.setDrAmt(discount);
                     } else {
                         gl.setSrcAccCode(supDisAcc);
                         gl.setAccCode(balAcc);
-                        gl.setDrAmt(discount);
+                        gl.setCrAmt(discount);
                     }
-                    gl.setSrcAccCode(payAcc);
-                    gl.setAccCode(balAcc);
                     gl.setRefNo(String.valueOf(payId));
                     gl.setDeptCode(mainDept);
                     gl.setMacId(MAC_ID);
                     gl.setCreatedBy(APP_NAME);
                     gl.setCurCode(curCode);
-                    gl.setDescription(description);
+                    gl.setDescription("Payment Discount Received");
                     gl.setCreatedDate(Util1.getTodayDate());
                     gl.setTranSource(tranSource);
                     gl.setReference(reference);
@@ -2077,9 +2074,6 @@ public class HMSIntegration {
         if (!otServiceRepo.searchGroup(groupId, Util1.getInteger(otPaidId)).isEmpty()) {
             return false;
         }
-        if (!otServiceRepo.searchGroup(groupId, Util1.getInteger(otRefundId)).isEmpty()) {
-            return false;
-        }
         return otServiceRepo.searchGroup(groupId, Util1.getInteger(otDiscountId)).isEmpty();
     }
 
@@ -2119,10 +2113,7 @@ public class HMSIntegration {
         if (!dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcDiscountId)).isEmpty()) {
             return false;
         }
-        if (!dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcPaidId)).isEmpty()) {
-            return false;
-        }
-        return dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcRefundId)).isEmpty();
+        return dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcPaidId)).isEmpty();
     }
 
     public void sendDCGroup(Object obj) {
