@@ -23,13 +23,13 @@ public class OPDHisDetail implements java.io.Serializable {
     @Column(name = "srv_fees2")
     private Double moFeeAmt;
     @Column(name = "srv_fees3")
-    private String staffFeeAmt;
+    private Double staffFeeAmt;
     @Column(name = "srv_fees4")
-    private String techFeeAmt;
+    private Double techFeeAmt;
     @Column(name = "srv_fees5")
-    private String referFeeAmt;
+    private Double referFeeAmt;
     @Column(name = "srv_fees6")
-    private String readFeeAmt;
+    private Double readFeeAmt;
     @ManyToOne
     @JoinColumn(name = "reader_doctor_id")
     private Doctor reader;

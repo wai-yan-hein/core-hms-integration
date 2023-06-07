@@ -168,7 +168,7 @@ public class AutoUpload {
                         if (vou.getVouPaid() > 0) {
                             listener.sendSaleVoucherToAccount(vou);
                         } else {
-                            listener.updateSale(vou.getVouNo());
+                            listener.updateSale(vou.getVouNo(), "ACK");
                         }
                     } else {
                         listener.sendSaleVoucherToAccount(vou);
@@ -189,7 +189,7 @@ public class AutoUpload {
                         if (vou.getVouPaid() > 0) {
                             listener.sendPurchaseVoucherToAccount(vou);
                         } else {
-                            listener.updatePurchase(vou.getVouNo());
+                            listener.updatePurchase(vou.getVouNo(), "ACK");
                         }
                     } else {
                         listener.sendPurchaseVoucherToAccount(vou);
@@ -210,7 +210,7 @@ public class AutoUpload {
                         if (vou.getVouPaid() > 0) {
                             listener.sendReturnInVoucherToAccount(vou);
                         } else {
-                            listener.updateReturnIn(vou.getVouNo());
+                            listener.updateReturnIn(vou.getVouNo(), "ACK");
                         }
                     } else {
                         listener.sendReturnInVoucherToAccount(vou);
@@ -231,7 +231,7 @@ public class AutoUpload {
                         if (vou.getVouPaid() > 0) {
                             listener.sendReturnOutVoucherToAccount(vou);
                         } else {
-                            listener.updateReturnOut(vou.getVouNo());
+                            listener.updateReturnOut(vou.getVouNo(), "ACK");
                         }
                     } else {
                         listener.sendReturnOutVoucherToAccount(vou);
@@ -252,7 +252,7 @@ public class AutoUpload {
                         if (op.getVouPaid() != 0) {
                             listener.sendOPDVoucherToAccount(op);
                         } else {
-                            listener.updateOPD(op.getVouNo());
+                            listener.updateOPD(op.getVouNo(), "ACK");
                         }
                     } else {
                         listener.sendOPDVoucherToAccount(op);
@@ -273,7 +273,7 @@ public class AutoUpload {
                         if (ot.getVouPaid() > 0) {
                             listener.sendOTVoucherToAccount(ot);
                         } else {
-                            listener.updateOT(ot.getVouNo());
+                            listener.updateOT(ot.getVouNo(), "ACK");
                         }
                     } else {
                         listener.sendOTVoucherToAccount(ot);
@@ -294,7 +294,7 @@ public class AutoUpload {
                         if (vou.getVouPaid() > 0) {
                             listener.sendDCVoucherToAccount(vou);
                         } else {
-                            listener.updateDC(vou.getVouNo());
+                            listener.updateDC(vou.getVouNo(), "ACK");
                         }
                     } else {
                         listener.sendDCVoucherToAccount(vou);

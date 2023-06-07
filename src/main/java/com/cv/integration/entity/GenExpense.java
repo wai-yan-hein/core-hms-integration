@@ -1,16 +1,16 @@
 package com.cv.integration.entity;
 
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
 import java.util.Date;
 
-@Getter
-@Setter
+@Data
 @Entity
 @Table(name = "gen_expense")
-public class GenExpense implements java.io.Serializable {
+public class GenExpense {
     @Id
     @Column(name = "gene_id")
     private Integer genId;
@@ -39,7 +39,8 @@ public class GenExpense implements java.io.Serializable {
     private Currency currency;
     @Column(name = "deleted")
     private boolean deleted;
-
+    @Column(name = "un_paid_status")
+    private boolean unpaid;
     public GenExpense() {
     }
 }

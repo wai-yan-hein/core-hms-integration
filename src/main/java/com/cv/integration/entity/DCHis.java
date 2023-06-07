@@ -1,16 +1,16 @@
 package com.cv.integration.entity;
 
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
 import java.util.Date;
 
-@Getter
-@Setter
+@Data
 @Entity
 @Table(name = "dc_his")
-public class DCHis implements java.io.Serializable {
+public class DCHis {
     @Id
     @Column(name = "dc_inv_id")
     private String vouNo;
@@ -24,7 +24,7 @@ public class DCHis implements java.io.Serializable {
     @Column(name = "disc_a")
     private Double vouDiscount;
     @Column(name = "paid")
-    private double vouPaid;
+    private Double vouPaid;
     @Column(name = "deleted")
     private boolean deleted;
     @ManyToOne

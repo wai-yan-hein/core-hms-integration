@@ -23,11 +23,11 @@ public class OTHisDetail implements java.io.Serializable {
     @Column(name = "srv_fee1")
     private Double hospitalAmt;
     @Column(name = "srv_fee2")
-    private String staffFeeAmt;
+    private Double staffFeeAmt;
     @Column(name = "srv_fee3")
-    private String nurseFeeAmt;
+    private Double nurseFeeAmt;
     @Column(name = "srv_fee4")
-    private String moFeeAmt;
+    private Double moFeeAmt;
     @Column(name = "qty")
     private Double qty;
 }

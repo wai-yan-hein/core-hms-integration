@@ -12,10 +12,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -135,33 +139,45 @@ public class HMSIntegration {
 
     private void sendAccount(List<Gl> glList) {
         if (!glList.isEmpty()) {
-            try {
-                Mono<Response> result = accountApi.post().uri("/account/save-gl-list").body(Mono.just(glList), List.class).retrieve().bodyToMono(Response.class);
-                Response response = result.block();
-                if (response != null) {
-                    String code = response.getVouNo();
-                    String tranSource = response.getTranSource();
-                    switch (tranSource) {
-                        case "TRADER" -> updateTrader(code);
-                        case "SALE" -> updateSale(code);
-                        case "PURCHASE" -> updatePurchase(code);
-                        case "RETURN_IN" -> updateReturnIn(code);
-                        case "RETURN_OUT" -> updateReturnOut(code);
-                        case "OPD" -> updateOPD(code);
-                        case "OT" -> updateOT(code);
-                        case "DC" -> updateDC(code);
-                        case "OPD_RECEIVE" -> updateOPDReceive(Integer.parseInt(code));
-                        case "EXPENSE" -> updateExpense(Integer.parseInt(code));
-                        case "PAYMENT" -> updatePayment(Integer.parseInt(code));
-                        case "OPENING" -> updateOpening(code);
-                        case "COA_OPD" -> updateOPDCOA(code);
-                        case "COA_OT" -> updateOTCOA(code);
-                        case "COA_DC" -> updateDCCOA(code);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("sendAccount : " + e.getMessage());
+            Response response = accountApi.post().uri("/account/save-gl-list").body(Mono.just(glList), List.class).retrieve().bodyToMono(Response.class)
+                    //.retryWhen(Retry.backoff(3, Duration.ofSeconds(10))
+                    //.maxBackoff(Duration.ofMinutes(1))) // Retry 3 times with a backoff of 10 seconds
+                    //.timeout(Duration.ofSeconds(1)) // Timeout after 5 minutes
+                    .onErrorResume(throwable -> {
+                        // Handle the error case when the server is down
+                        log.error("sendAccount: " + throwable.getMessage());
+                        String code = glList.get(0).getRefNo();
+                        String tranSource = glList.get(0).getTranSource();
+                        update(tranSource, code, null);
+                        return Mono.empty(); // Return an empty Mono or a default response
+                    }).block();
+            if (response != null) {
+                String code = response.getVouNo();
+                String tranSource = response.getTranSource();
+                update(tranSource, code, ACK);
             }
+
+        }
+    }
+
+
+    private void update(String tranSource, String code, String status) {
+        switch (tranSource) {
+            case "TRADER" -> updateTrader(code, status);
+            case "SALE" -> updateSale(code, status);
+            case "PURCHASE" -> updatePurchase(code, status);
+            case "RETURN_IN" -> updateReturnIn(code, status);
+            case "RETURN_OUT" -> updateReturnOut(code, status);
+            case "OPD" -> updateOPD(code, status);
+            case "OT" -> updateOT(code, status);
+            case "DC" -> updateDC(code, status);
+            case "OPD_RECEIVE" -> updateOPDReceive(Integer.parseInt(code), status);
+            case "EXPENSE", "UNPAID" -> updateExpense(Integer.parseInt(code), status);
+            case "PAYMENT" -> updatePayment(Integer.parseInt(code), status);
+            case "OPENING" -> updateOpening(code, status);
+            case "COA_OPD" -> updateOPDCOA(code, status);
+            case "COA_OT" -> updateOTCOA(code, status);
+            case "COA_DC" -> updateDCCOA(code, status);
         }
     }
 
@@ -173,7 +189,7 @@ public class HMSIntegration {
     public void saveOpening(COAOpening op) {
         op = accountApi.post().uri("/account/save-opening").body(Mono.just(op), COAOpening.class).retrieve().bodyToMono(COAOpening.class).block();
         assert op != null;
-        updateOpening(op.getTraderCode());
+        updateOpening(op.getTraderCode(), ACK);
     }
 
 
@@ -196,41 +212,41 @@ public class HMSIntegration {
     }
 
 
-    private void updateOPDCOA(String code) {
+    private void updateOPDCOA(String code, String status) {
         if (code != null) {
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
-            opdCategoryRepo.updateOPDCategory(groupId, ACK, coaCode);
+            opdCategoryRepo.updateOPDCategory(groupId, status, coaCode);
             log.info(String.format("updateOPDCOA: %s", code));
         }
 
     }
 
-    private void updateOTCOA(String code) {
+    private void updateOTCOA(String code, String status) {
         if (code != null) {
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
-            otGroupRepo.updateOTGroup(groupId, ACK, coaCode);
+            otGroupRepo.updateOTGroup(groupId, status, coaCode);
             log.info(String.format("updateOTCOA: %s", code));
         }
 
     }
 
-    private void updateDCCOA(String code) {
+    private void updateDCCOA(String code, String status) {
         if (code != null) {
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
-            dcGroupRepo.updateDCGroup(groupId, ACK, coaCode);
+            dcGroupRepo.updateDCGroup(groupId, status, coaCode);
             log.info(String.format("updateDCCOA: %s", code));
         }
 
     }
 
-    private void updateOpening(String code) {
-        traderOpeningRepo.updateOpening(code, ACK);
+    private void updateOpening(String code, String status) {
+        traderOpeningRepo.updateOpening(code, status);
         log.info(String.format("updateOpening: %s", code));
     }
 
@@ -290,7 +306,7 @@ public class HMSIntegration {
                     Mono<AccTrader> result = accountApi.post().uri("/account/save-trader").body(Mono.just(accTrader), AccTrader.class).retrieve().bodyToMono(AccTrader.class).doOnError((e) -> log.error(e.getMessage()));
                     AccTrader trader = result.block();
                     assert trader != null;
-                    updateTrader(t.getTraderCode());
+                    updateTrader(t.getTraderCode(), ACK);
                 } catch (Exception e) {
                     log.error("sendTrader : " + e.getMessage());
                 }
@@ -308,8 +324,8 @@ public class HMSIntegration {
     }
 
 
-    private void updateTrader(String traderCode) {
-        traderRepo.updateTrader(traderCode, ACK);
+    private void updateTrader(String traderCode, String status) {
+        traderRepo.updateTrader(traderCode, status);
         log.info(String.format("updateTrader: %s", traderCode));
     }
 
@@ -453,8 +469,8 @@ public class HMSIntegration {
         }
     }
 
-    public void updateSale(String vouNo) {
-        saleHisRepo.updateSale(vouNo, ACK);
+    public void updateSale(String vouNo, String status) {
+        saleHisRepo.updateSale(vouNo, status);
         log.info(String.format("updateSale :%s", vouNo));
     }
 
@@ -541,8 +557,8 @@ public class HMSIntegration {
         }
     }
 
-    public void updatePurchase(String vouNo) {
-        purHisRepo.updatePurchase(vouNo, ACK);
+    public void updatePurchase(String vouNo, String status) {
+        purHisRepo.updatePurchase(vouNo, status);
         log.info(String.format("updatePurchase %s", vouNo));
     }
 
@@ -642,8 +658,8 @@ public class HMSIntegration {
         }
     }
 
-    public void updateReturnIn(String vouNo) {
-        returnInRepo.updateReturnIn(vouNo, ACK);
+    public void updateReturnIn(String vouNo, String status) {
+        returnInRepo.updateReturnIn(vouNo, status);
         log.info(String.format("updateReturnIn: %s", vouNo));
     }
 
@@ -727,8 +743,8 @@ public class HMSIntegration {
         }
     }
 
-    public void updateReturnOut(String vouNo) {
-        returnOutRepo.updateReturnOut(vouNo, ACK);
+    public void updateReturnOut(String vouNo, String status) {
+        returnOutRepo.updateReturnOut(vouNo, status);
         log.info(String.format("updateReturnOut: %s", vouNo));
     }
 
@@ -788,6 +804,13 @@ public class HMSIntegration {
                         //income
                         String tmp = admission ? Util1.isNull(ipdAcc, opdAcc) : opdAcc;
                         srcAcc = Util1.isNull(tmp, srcAcc);
+                        if (amount == 0) {
+                            op.setMoFeeAmt(amount);
+                            op.setStaffFeeAmt(amount);
+                            op.setTechFeeAmt(amount);
+                            op.setReferFeeAmt(amount);
+                            op.setReadFeeAmt(amount);
+                        }
                         if (amount != 0) {
                             Gl gl = new Gl();
                             GlKey key = new GlKey();
@@ -1080,8 +1103,8 @@ public class HMSIntegration {
     }
 
 
-    public void updateOPD(String vouNo) {
-        opdHisRepo.updateOPD(vouNo, ACK);
+    public void updateOPD(String vouNo, String status) {
+        opdHisRepo.updateOPD(vouNo, status);
         log.info(String.format("updateOPD: %s", vouNo));
     }
 
@@ -1142,6 +1165,11 @@ public class HMSIntegration {
                         //amount
                         double qty = Util1.getDouble(ot.getQty());
                         double amount = Util1.getDouble(ot.getAmount());
+                        if (amount == 0) {
+                            ot.setStaffFeeAmt(amount);
+                            ot.setMoFeeAmt(amount);
+                            ot.setNurseFeeAmt(amount);
+                        }
                         //discount
                         if (serviceId == Util1.getInteger(otDiscountId)) {
                             Gl gl = new Gl();
@@ -1424,8 +1452,8 @@ public class HMSIntegration {
     }
 
 
-    public void updateOT(String vouNo) {
-        otHisRepo.updateOT(vouNo, ACK);
+    public void updateOT(String vouNo, String status) {
+        otHisRepo.updateOT(vouNo, status);
         log.info(String.format("updateOT: %s", vouNo));
     }
 
@@ -1482,6 +1510,11 @@ public class HMSIntegration {
                         //amount
                         double qty = Util1.getDouble(dc.getQty());
                         double amount = Util1.getDouble(dc.getAmount());
+                        if (amount == 0) {
+                            dc.setTechFeeAmt(amount);
+                            dc.setMoFeeAmt(amount);
+                            dc.setNurseFeeAmt(amount);
+                        }
                         //discount
                         if (serviceId == Util1.getInteger(dcDiscountId)) {
                             Gl gl = new Gl();
@@ -1787,8 +1820,8 @@ public class HMSIntegration {
         }
     }
 
-    public void updateDC(String vouNo) {
-        dcHisRepo.updateDC(vouNo, ACK);
+    public void updateDC(String vouNo, String status) {
+        dcHisRepo.updateDC(vouNo, status);
         log.info(String.format("updateDC: %s", vouNo));
     }
 
@@ -1860,64 +1893,70 @@ public class HMSIntegration {
                 gl.setDeleted(deleted);
                 gl.setCash(true);
                 list.add(gl);
-                sendAccount(list);
                 log.info(String.format("sendOPDReceiveToAccount: %s", id));
+                sendAccount(list);
             }
 
         }
     }
 
 
-    private void updateOPDReceive(Integer id) {
-        opdReceiveRepo.updateOPD(id, ACK);
+    private void updateOPDReceive(Integer id, String status) {
+        opdReceiveRepo.updateOPD(id, status);
         log.info(String.format("updateOPDReceive: %s", id));
     }
 
     public void sendGeneralExpenseToAcc(GenExpense ge) {
         if (Util1.getBoolean(uploadExpense)) {
-            String tranSource = "EXPENSE";
-            List<Gl> listGl = new ArrayList<>();
-            String description = ge.getDescription();
-            Date expDate = ge.getExpDate();
-            String remark = ge.getRemark();
-            String srcAcc = ge.getSrcAcc();
-            String account = ge.getAccount();
-            String depCode = ge.getDeptCode();
-            String curCode = ge.getCurrency() == null ? "MMK" : ge.getCurrency().getAccCurCode();
-            String expenseId = ge.getGenId().toString();
-            double expAmt = ge.getExpAmt();
-            boolean deleted = ge.isDeleted();
-            if (Util1.getDouble(expAmt) > 0) {
-                Gl gl = new Gl();
-                GlKey key = new GlKey();
-                key.setDeptId(1);
-                key.setCompCode(compCode);
-                gl.setKey(key);
-                gl.setGlDate(expDate);
-                gl.setSrcAccCode(srcAcc);
-                gl.setAccCode(account);
-                gl.setCrAmt(expAmt);
-                gl.setRefNo(expenseId);
-                gl.setDeptCode(depCode);
-                gl.setMacId(MAC_ID);
-                gl.setCreatedBy(APP_NAME);
-                gl.setCurCode(curCode);
-                gl.setDescription(description);
-                gl.setCreatedDate(Util1.getTodayDate());
-                gl.setTranSource(tranSource);
-                gl.setReference(remark);
-                gl.setDeleted(deleted);
-                gl.setCash(true);
-                listGl.add(gl);
+            String tranSource = ge.isUnpaid() ? "UNPAID" : "EXPENSE";
+            String geneId = ge.getGenId().toString();
+            if (ge.isDeleted()) {
+                deleteGl(tranSource, geneId, null);
+            } else {
+                List<Gl> listGl = new ArrayList<>();
+                String description = ge.getDescription();
+                Date expDate = ge.getExpDate();
+                String remark = ge.getRemark();
+                String srcAcc = ge.getSrcAcc();
+                String account = ge.getAccount();
+                String depCode = ge.getDeptCode();
+                String curCode = ge.getCurrency() == null ? "MMK" : ge.getCurrency().getAccCurCode();
+                String expenseId = ge.getGenId().toString();
+                double expAmt = ge.getExpAmt();
+                boolean deleted = ge.isDeleted();
+                if (Util1.getDouble(expAmt) > 0) {
+                    Gl gl = new Gl();
+                    GlKey key = new GlKey();
+                    key.setDeptId(1);
+                    key.setCompCode(compCode);
+                    gl.setKey(key);
+                    gl.setGlDate(expDate);
+                    gl.setSrcAccCode(srcAcc);
+                    gl.setAccCode(account);
+                    gl.setCrAmt(expAmt);
+                    gl.setRefNo(expenseId);
+                    gl.setDeptCode(depCode);
+                    gl.setMacId(MAC_ID);
+                    gl.setCreatedBy(APP_NAME);
+                    gl.setCurCode(curCode);
+                    gl.setDescription(description);
+                    gl.setCreatedDate(Util1.getTodayDate());
+                    gl.setTranSource(tranSource);
+                    gl.setReference(remark);
+                    gl.setDeleted(deleted);
+                    gl.setCash(true);
+                    listGl.add(gl);
+                }
+                if (!listGl.isEmpty()) {
+                    sendAccount(listGl);
+                    log.info(String.format("sendGeneralExpenseToAcc: %s", expenseId));
+                }
             }
-            if (!listGl.isEmpty()) sendAccount(listGl);
-            log.info(String.format("sendGeneralExpenseToAcc: %s", expenseId));
-
         }
     }
 
-    private void updateExpense(Integer id) {
-        genExpenseRepo.updateExpense(id, ACK);
+    private void updateExpense(Integer id, String status) {
+        genExpenseRepo.updateExpense(id, status);
         log.info(String.format("updateExpense %s", id));
     }
 
@@ -2035,8 +2074,8 @@ public class HMSIntegration {
         }
     }
 
-    private void updatePayment(Integer id) {
-        paymentHisRepo.updatePayment(id, ACK);
+    private void updatePayment(Integer id, String status) {
+        paymentHisRepo.updatePayment(id, status);
         log.info(String.format("updatePayment: %s", id));
     }
 
@@ -2059,7 +2098,7 @@ public class HMSIntegration {
                 coa.setMacId(MAC_ID);
                 coa.setOption("USR");
                 coa.setMigCode(String.valueOf(opd.getCatId()));
-                updateOPDCOA(saveCOA(coa));
+                updateOPDCOA(saveCOA(coa), ACK);
                 log.info(String.format("sendOPDGroup: %s", opd.getCatName()));
             } else {
                 log.info("coa parent is not assigned.");
@@ -2097,7 +2136,7 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(groupId));
-                    updateOTCOA(saveCOA(coa));
+                    updateOTCOA(saveCOA(coa), ACK);
                     log.info(String.format("sendOTGroup: %s", ot.getGroupName()));
                 }
             } else {
@@ -2136,7 +2175,7 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(dc.getGroupId()));
-                    updateDCCOA(saveCOA(coa));
+                    updateDCCOA(saveCOA(coa), ACK);
                     log.info(String.format("sendDCGroup: %s", dc.getGroupName()));
                 }
             } else {

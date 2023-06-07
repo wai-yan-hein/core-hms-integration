@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 
@@ -47,19 +48,20 @@ public class VoucherController {
     private DCGroupRepo dcGroupRepo;
 
     @GetMapping("/apiTest")
-    private  ResponseEntity<?> test(){
+    private ResponseEntity<?> test() {
         log.info("/apiTest");
         return ResponseEntity.status(HttpStatus.FOUND).body("OK");
     }
+
     @PostMapping("/sale")
-    private ResponseEntity<?> saleVoucher(@RequestParam String vouNo) {
+    private Mono<?> saleVoucher(@RequestParam String vouNo) {
         log.info("/sale : " + vouNo);
         Optional<SaleHis> option = saleHisRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendSaleVoucherToAccount(option.get());
-            return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
+            return Mono.just("sent.");
         }
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Voucher Not found.");
+        return Mono.just("sale voucher not found : " + vouNo);
     }
 
     @PostMapping("/purchase")
