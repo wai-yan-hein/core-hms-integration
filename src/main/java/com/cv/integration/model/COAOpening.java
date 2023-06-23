@@ -4,6 +4,7 @@ import com.cv.integration.entity.OpeningKey;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Data
@@ -14,7 +15,7 @@ public class COAOpening {
     private String curCode;
     private Double crAmt;
     private Double drAmt;
-    private Date createdDate;
+    private LocalDateTime createdDate;
     private String deptCode;
     private String traderCode;
 }

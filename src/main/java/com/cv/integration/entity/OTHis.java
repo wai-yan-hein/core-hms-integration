@@ -3,7 +3,9 @@ package com.cv.integration.entity;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Getter
@@ -14,9 +16,8 @@ public class OTHis implements java.io.Serializable {
     @Id
     @Column(name = "ot_inv_id")
     private String vouNo;
-    @Column(name = "ot_date")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date vouDate;
+    @Column(name = "ot_date",columnDefinition = "TIMESTAMP")
+    private LocalDateTime vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
     @Column(name = "vou_balance")
@@ -39,7 +40,8 @@ public class OTHis implements java.io.Serializable {
     private Patient patient;
     @Column(name = "payment_id")
     private Integer paymentId;
-
+    @Column(name = "doctor_id")
+    private String doctorId;
 
     public OTHis() {
     }

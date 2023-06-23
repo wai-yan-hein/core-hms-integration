@@ -10,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -26,9 +28,8 @@ public class SaleHis implements java.io.Serializable {
     @Id
     @Column(name = "sale_inv_id")
     private String vouNo;
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "sale_date")
-    private Date vouDate;
+    @Column(name = "sale_date", columnDefinition = "TIMESTAMP")
+    private LocalDateTime vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
     @Column(name = "balance")

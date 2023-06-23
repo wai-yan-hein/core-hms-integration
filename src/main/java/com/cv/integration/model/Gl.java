@@ -1,19 +1,15 @@
 package com.cv.integration.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
-import lombok.NonNull;
-
-import javax.persistence.Column;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
-import javax.persistence.Transient;
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Data
-public class Gl implements java.io.Serializable {
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class Gl {
 
     private GlKey key;
-    private Date glDate;
+    private LocalDateTime glDate;
     private String description;
     private String srcAccCode;
     private String accCode;
@@ -24,7 +20,7 @@ public class Gl implements java.io.Serializable {
     private String deptCode;
     private String vouNo;
     private String traderCode;
-    private Date createdDate;
+    private LocalDateTime createdDate;
     private String modifyBy;
     private String createdBy;
     private String tranSource;
@@ -34,6 +30,10 @@ public class Gl implements java.io.Serializable {
     private String refNo;
     private boolean cash = false;
     private boolean deleted;
+    private String patientNo;
+    private String doctorId;
+    private String serviceId;
+
     public Gl() {
     }
 }

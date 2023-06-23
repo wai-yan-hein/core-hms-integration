@@ -3,7 +3,9 @@ package com.cv.integration.entity;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Getter
@@ -18,9 +20,8 @@ public class PaymentHis implements java.io.Serializable {
     private boolean deleted;
     @Column(name = "paid_amtc")
     private Double payAmt;
-    @Temporal(TemporalType.DATE)
-    @Column(name = "pay_date")
-    private Date payDate;
+    @Column(name = "pay_dt",columnDefinition = "TIMESTAMP")
+    private LocalDateTime payDate;
     @Column(name = "remark")
     private String remark;
     @ManyToOne

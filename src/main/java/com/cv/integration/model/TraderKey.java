@@ -2,9 +2,7 @@ package com.cv.integration.model;
 
 import lombok.Data;
 
-import javax.persistence.Column;
-import javax.persistence.Embeddable;
-import java.io.Serializable;
+import jakarta.persistence.*;
 
 @Data
 public class TraderKey {

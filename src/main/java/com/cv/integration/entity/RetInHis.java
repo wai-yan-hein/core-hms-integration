@@ -9,7 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -25,9 +27,8 @@ public class RetInHis implements java.io.Serializable {
     @Id
     @Column(name = "ret_in_id")
     private String vouNo;
-    @Column(name = "ret_in_date")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date vouDate;
+    @Column(name = "ret_in_date",columnDefinition = "TIMESTAMP")
+    private LocalDateTime vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
     @Column(name = "balance")

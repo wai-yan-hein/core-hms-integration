@@ -8,7 +8,9 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -24,9 +26,8 @@ public class PurHis implements java.io.Serializable {
     @Id
     @Column(name = "pur_inv_id")
     private String vouNo;
-    @Column(name = "pur_date")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date vouDate;
+    @Column(name = "pur_date",columnDefinition = "TIMESTAMP")
+    private LocalDateTime vouDate;
     @Column(name = "vou_total")
     private Double vouTotal;
     @Column(name = "balance")

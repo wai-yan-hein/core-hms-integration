@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -39,7 +41,12 @@ public class Util1 {
     public static Date getTodayDate() {
         return Calendar.getInstance().getTime();
     }
-
+    public static LocalDateTime parseLocalDateTime(Date date) {
+        if (date != null) {
+            return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        }
+        return null;
+    }
     public static Date toDate(String sqlDate) {
         Date date = null;
         try {
