@@ -760,7 +760,7 @@ public class HMSIntegration {
                 String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
                 String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                 String reference;
-                String patientNo =null;
+                String patientNo = null;
                 String doctorId = oh.getDoctorId();
                 if (!Objects.isNull(oh.getPatient())) {
                     patientNo = oh.getPatient().getPatientNo();
@@ -1148,7 +1148,7 @@ public class HMSIntegration {
                 String patientNo = null;
                 String doctorId = oh.getDoctorId();
                 if (!Objects.isNull(oh.getPatient())) {
-                    patientNo= oh.getPatient().getPatientNo();
+                    patientNo = oh.getPatient().getPatientNo();
                     String patientName = oh.getPatient().getPatientName();
                     String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
@@ -1173,7 +1173,7 @@ public class HMSIntegration {
                             }
                         }
                         OTGroup group = ot.getService().getOtGroup();
-                        Integer serviceId =ot.getService().getServiceId();
+                        Integer serviceId = ot.getService().getServiceId();
                         String serviceName = ot.getService().getServiceName();
                         if (!doctorName.isEmpty()) {
                             serviceName = String.format("%s%s", serviceName, doctorName);
@@ -1518,7 +1518,7 @@ public class HMSIntegration {
                 LocalDateTime vouDate = oh.getVouDate();
                 String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
                 String reference;
-                String patientNo=null;
+                String patientNo = null;
                 String doctorId = oh.getDoctorId();
                 if (!Objects.isNull(oh.getPatient())) {
                     patientNo = oh.getPatient().getPatientNo();
@@ -1904,8 +1904,7 @@ public class HMSIntegration {
     public void sendOPDReceiveToAccount(OPDReceive receive) {
         if (Util1.getBoolean(uploadOPDBill)) {
             Integer id = receive.getBillId();
-            Date payDate = receive.getPayDate();
-            LocalDateTime vouDate = Util1.parseLocalDateTime(receive.getPayDate());
+            LocalDateTime vouDate = receive.getPayDate();
             double payAmt = Util1.getDouble(receive.getPayAmt());
             String regNo = receive.getPatient().getPatientNo();
             String curCode = receive.getCurrency().getAccCurCode();
@@ -1916,7 +1915,7 @@ public class HMSIntegration {
             String balAcc;
             String traderCode;
             String description;
-            if (reportService.isAdmission(Util1.toDateStr(payDate, "yyyy-MM-dd"), regNo, id)) {
+            if (reportService.isAdmission(Util1.toDateStr(vouDate), regNo, id)) {
                 tranSource = "DC";
                 AccountSetting ac = hmAccSetting.get(tranSource);
                 deptCode = ac.getDeptCode();
@@ -1993,7 +1992,7 @@ public class HMSIntegration {
             } else {
                 List<Gl> listGl = new ArrayList<>();
                 String description = ge.getDescription();
-                LocalDateTime expDate = Util1.parseLocalDateTime(ge.getExpDate());
+                LocalDateTime expDate =ge.getExpDate();
                 String remark = ge.getRemark();
                 String srcAcc = ge.getSrcAcc();
                 String account = ge.getAccount();

@@ -15,6 +15,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -22,6 +23,7 @@ import java.util.Date;
 @Slf4j
 public class Util1 {
     private static final DecimalFormat df0 = new DecimalFormat("0");
+
     public static double getDouble(Object obj) {
         return obj == null ? 0 : Double.parseDouble(obj.toString());
     }
@@ -41,12 +43,19 @@ public class Util1 {
     public static Date getTodayDate() {
         return Calendar.getInstance().getTime();
     }
-    public static LocalDateTime parseLocalDateTime(Date date) {
+
+    public static String  toDateStr(LocalDateTime date) {
         if (date != null) {
-            return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+            // Define the formatter for the desired date format
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+            // Format the LocalDateTime to a String
+            return date.format(formatter);
         }
         return null;
     }
+
+
     public static Date toDate(String sqlDate) {
         Date date = null;
         try {
@@ -54,19 +63,6 @@ public class Util1 {
         } catch (ParseException e) {
             log.error(String.format("toDate : %s", e));
         }
-        return date;
-    }
-
-    public static Date toMySqlDate(Date date) {
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
-        try {
-            if (date != null) {
-                date = formatter.parse(date.toString());
-            }
-        } catch (ParseException ex) {
-            log.info("toMySqlDate : " + ex.getMessage());
-        }
-
         return date;
     }
 

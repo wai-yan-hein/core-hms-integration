@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Getter
@@ -22,9 +24,8 @@ public class OPDReceive implements java.io.Serializable {
     @ManyToOne
     @JoinColumn(name = "currency_id")
     private Currency currency;
-    @Column(name = "pay_date")
-    @Temporal(TemporalType.DATE)
-    private Date payDate;
+    @Column(name = "pay_date",columnDefinition = "TIMESTAMP")
+    private LocalDateTime payDate;
     @Column(name = "pay_amt")
     private Double payAmt;
     @Column(name = "remark")
