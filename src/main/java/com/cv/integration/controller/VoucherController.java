@@ -3,6 +3,7 @@ package com.cv.integration.controller;
 import com.cv.integration.entity.*;
 import com.cv.integration.listener.HMSIntegration;
 import com.cv.integration.repo.*;
+import com.cv.integration.service.ReportService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -46,6 +47,8 @@ public class VoucherController {
     private OTGroupRepo otGroupRepo;
     @Autowired
     private DCGroupRepo dcGroupRepo;
+    @Autowired
+    private ReportService reportService;
 
     @GetMapping("/apiTest")
     private ResponseEntity<?> test() {
@@ -194,5 +197,38 @@ public class VoucherController {
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
         }
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Voucher Not found.");
+    }
+
+    @GetMapping("/getSaleList")
+    private ResponseEntity<?> getSaleList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getSaleList(fromDate, toDate));
+    }
+    @GetMapping("/getPurchaseList")
+    private ResponseEntity<?> getPurchaseList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getPurchaseList(fromDate, toDate));
+    }
+    @GetMapping("/getReturnInList")
+    private ResponseEntity<?> getReturnInList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getReturnInList(fromDate, toDate));
+    }
+    @GetMapping("/getReturnOutList")
+    private ResponseEntity<?> getReturnOutList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getReturnOutList(fromDate, toDate));
+    }
+    @GetMapping("/getOPDList")
+    private ResponseEntity<?> getOPDList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getOPDList(fromDate, toDate));
+    }
+    @GetMapping("/getOTList")
+    private ResponseEntity<?> getOTList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getOTList(fromDate, toDate));
+    }
+    @GetMapping("/getDCList")
+    private ResponseEntity<?> getDCList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getDCList(fromDate, toDate));
+    }
+    @GetMapping("/getPaymentList")
+    private ResponseEntity<?> getPaymentList(@RequestParam String fromDate, @RequestParam String toDate) {
+        return ResponseEntity.ok(reportService.getPaymentList(fromDate, toDate));
     }
 }
