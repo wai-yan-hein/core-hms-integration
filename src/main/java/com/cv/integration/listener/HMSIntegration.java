@@ -881,7 +881,7 @@ public class HMSIntegration {
                         }
                         //mo payable
                         if (!Util1.isNullOrEmpty(moAcc)) {
-                            double moFeeAmt = percent ? qty * amount * Util1.getDouble(op.getMoFeeAmt()) / 100 : Util1.getDouble(op.getMoFeeAmt()) * qty;
+                            double moFeeAmt = percent ? amount * Util1.getDouble(op.getMoFeeAmt()) / 100 : Util1.getDouble(op.getMoFeeAmt()) * qty;
                             String[] accounts = moAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
@@ -920,7 +920,7 @@ public class HMSIntegration {
                         }
                         //staff payable
                         if (!Util1.isNullOrEmpty(staffAcc)) {
-                            double staffAmt = percent ? qty * amount * Util1.getDouble(op.getStaffFeeAmt()) / 100 : Util1.getDouble(op.getStaffFeeAmt()) * qty;
+                            double staffAmt = percent ?Util1.getDouble(op.getStaffFeeAmt()) / 100 : Util1.getDouble(op.getStaffFeeAmt()) * qty;
                             String[] accounts = staffAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
@@ -959,7 +959,7 @@ public class HMSIntegration {
                         }
                         //tech payable
                         if (!Util1.isNullOrEmpty(techAcc)) {
-                            double techAmt = percent ? qty * amount * Util1.getDouble(op.getTechFeeAmt()) / 100 : Util1.getDouble(op.getTechFeeAmt()) * qty;
+                            double techAmt = percent ?amount * Util1.getDouble(op.getTechFeeAmt()) / 100 : Util1.getDouble(op.getTechFeeAmt()) * qty;
                             String[] accounts = techAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
@@ -998,7 +998,7 @@ public class HMSIntegration {
                         }
                         //refer payable
                         if (!Util1.isNullOrEmpty(referAcc)) {
-                            double referAmt = percent ? qty * amount * Util1.getDouble(op.getReferFeeAmt()) / 100 : Util1.getDouble(op.getReferFeeAmt()) * qty;
+                            double referAmt = percent ?amount * Util1.getDouble(op.getReferFeeAmt()) / 100 : Util1.getDouble(op.getReferFeeAmt()) * qty;
                             String[] accounts = referAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
@@ -1037,7 +1037,7 @@ public class HMSIntegration {
                         }
                         //refer payable
                         if (!Util1.isNullOrEmpty(readerAcc)) {
-                            double readerAmt = percent ? qty * amount * Util1.getDouble(op.getReadFeeAmt()) / 100 : Util1.getDouble(op.getReadFeeAmt()) * qty;
+                            double readerAmt = percent ? amount * Util1.getDouble(op.getReadFeeAmt()) / 100 : Util1.getDouble(op.getReadFeeAmt()) * qty;
                             String[] accounts = readerAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
