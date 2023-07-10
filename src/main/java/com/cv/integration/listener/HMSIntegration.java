@@ -894,10 +894,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (moFeeAmt > 0) {
                                     gl.setCrAmt(moFeeAmt);
                                 } else {
-                                    gl.setDrAmt(moFeeAmt);
+                                    gl.setDrAmt(moFeeAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -905,7 +907,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -920,7 +921,7 @@ public class HMSIntegration {
                         }
                         //staff payable
                         if (!Util1.isNullOrEmpty(staffAcc)) {
-                            double staffAmt = percent ?Util1.getDouble(op.getStaffFeeAmt()) / 100 : Util1.getDouble(op.getStaffFeeAmt()) * qty;
+                            double staffAmt = percent ? Util1.getDouble(op.getStaffFeeAmt()) / 100 : Util1.getDouble(op.getStaffFeeAmt()) * qty;
                             String[] accounts = staffAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
@@ -933,10 +934,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (staffAmt > 0) {
                                     gl.setCrAmt(staffAmt);
                                 } else {
-                                    gl.setDrAmt(staffAmt);
+                                    gl.setDrAmt(staffAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -944,7 +947,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -959,7 +961,7 @@ public class HMSIntegration {
                         }
                         //tech payable
                         if (!Util1.isNullOrEmpty(techAcc)) {
-                            double techAmt = percent ?amount * Util1.getDouble(op.getTechFeeAmt()) / 100 : Util1.getDouble(op.getTechFeeAmt()) * qty;
+                            double techAmt = percent ? amount * Util1.getDouble(op.getTechFeeAmt()) / 100 : Util1.getDouble(op.getTechFeeAmt()) * qty;
                             String[] accounts = techAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
@@ -972,10 +974,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (techAmt > 0) {
                                     gl.setCrAmt(techAmt);
                                 } else {
-                                    gl.setDrAmt(techAmt);
+                                    gl.setDrAmt(techAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -983,7 +987,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -998,7 +1001,7 @@ public class HMSIntegration {
                         }
                         //refer payable
                         if (!Util1.isNullOrEmpty(referAcc)) {
-                            double referAmt = percent ?amount * Util1.getDouble(op.getReferFeeAmt()) / 100 : Util1.getDouble(op.getReferFeeAmt()) * qty;
+                            double referAmt = percent ? amount * Util1.getDouble(op.getReferFeeAmt()) / 100 : Util1.getDouble(op.getReferFeeAmt()) * qty;
                             String[] accounts = referAcc.split(",");
                             String sAcc = accounts[0];
                             String acc = accounts[1];
@@ -1009,12 +1012,14 @@ public class HMSIntegration {
                                 key.setCompCode(compCode);
                                 gl.setKey(key);
                                 gl.setGlDate(vouDate);
+                                gl.setDescription(serviceName);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
                                 if (referAmt > 0) {
                                     gl.setCrAmt(referAmt);
                                 } else {
-                                    gl.setDrAmt(referAmt);
+                                    gl.setDescription("Return : " + serviceName);
+                                    gl.setDrAmt(referAmt * -1);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1022,7 +1027,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -1053,7 +1057,7 @@ public class HMSIntegration {
                                 if (readerAmt > 0) {
                                     gl.setCrAmt(readerAmt);
                                 } else {
-                                    gl.setDrAmt(readerAmt);
+                                    gl.setDrAmt(readerAmt * -1);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1379,10 +1383,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (moFeeAmt > 0) {
                                     gl.setCrAmt(moFeeAmt);
                                 } else {
-                                    gl.setDrAmt(moFeeAmt);
+                                    gl.setDrAmt(moFeeAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1390,7 +1396,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -1418,10 +1423,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (staffAmt > 0) {
                                     gl.setCrAmt(staffAmt);
                                 } else {
-                                    gl.setDrAmt(staffAmt);
+                                    gl.setDrAmt(staffAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1429,7 +1436,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -1457,10 +1463,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (nurseAmt > 0) {
                                     gl.setCrAmt(nurseAmt);
                                 } else {
-                                    gl.setDrAmt(nurseAmt);
+                                    gl.setDrAmt(nurseAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1468,7 +1476,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -1778,10 +1785,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (moFeeAmt > 0) {
                                     gl.setCrAmt(moFeeAmt);
                                 } else {
-                                    gl.setDrAmt(moFeeAmt);
+                                    gl.setDrAmt(moFeeAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1789,7 +1798,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -1817,10 +1825,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (techAmt > 0) {
                                     gl.setCrAmt(techAmt);
                                 } else {
-                                    gl.setDrAmt(techAmt);
+                                    gl.setDrAmt(techAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1828,7 +1838,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -1856,10 +1865,12 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (nurseAmt > 0) {
                                     gl.setCrAmt(nurseAmt);
                                 } else {
-                                    gl.setDrAmt(nurseAmt);
+                                    gl.setDrAmt(nurseAmt * -1);
+                                    gl.setDescription("Return : " + serviceName);
                                 }
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
@@ -1867,7 +1878,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
@@ -1992,7 +2002,7 @@ public class HMSIntegration {
             } else {
                 List<Gl> listGl = new ArrayList<>();
                 String description = ge.getDescription();
-                LocalDateTime expDate =ge.getExpDate();
+                LocalDateTime expDate = ge.getExpDate();
                 String remark = ge.getRemark();
                 String srcAcc = ge.getSrcAcc();
                 String account = ge.getAccount();
