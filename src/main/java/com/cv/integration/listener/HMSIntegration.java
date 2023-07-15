@@ -136,7 +136,10 @@ public class HMSIntegration {
 
     private void sendAccount(List<Gl> glList) {
         if (!glList.isEmpty()) {
-            Response response = accountApi.post().uri("/account/save-gl-list").body(Mono.just(glList), List.class).retrieve().bodyToMono(Response.class)
+            Response response = accountApi.post().uri("/account/save-gl-list")
+                    .body(Mono.just(glList), List.class)
+                    .retrieve()
+                    .bodyToMono(Response.class)
                     //.retryWhen(Retry.backoff(3, Duration.ofSeconds(10))
                     //.maxBackoff(Duration.ofMinutes(1))) // Retry 3 times with a backoff of 10 seconds
                     //.timeout(Duration.ofSeconds(1)) // Timeout after 5 minutes
@@ -178,9 +181,11 @@ public class HMSIntegration {
         }
     }
 
-    public String saveCOA(ChartOfAccount coa) {
-        Mono<String> result = accountApi.post().uri("/account/process-coa").body(Mono.just(coa), ChartOfAccount.class).retrieve().bodyToMono(String.class);
-        return result.block(Duration.ofMinutes(1));
+    public Mono<String> saveCOA(ChartOfAccount coa) {
+        return accountApi.post().uri("/account/process-coa")
+                .body(Mono.just(coa), ChartOfAccount.class)
+                .retrieve()
+                .bodyToMono(String.class);
     }
 
     public void saveOpening(COAOpening op) {
@@ -199,11 +204,14 @@ public class HMSIntegration {
         gl.setRefNo(vouNo);
         gl.setSrcAccCode(srcAcc);
         if (srcAcc != null) {
-            accountApi.post().uri("/account/delete-gl-by-account").body(Mono.just(gl), Gl.class).retrieve().bodyToMono(String.class).subscribe((t) -> {
-            }, (e) -> log.info(e.getMessage()));
+            accountApi.post().uri("/account/delete-gl-by-account")
+                    .body(Mono.just(gl), Gl.class).retrieve()
+                    .bodyToMono(String.class).subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
         } else {
-            accountApi.post().uri("/account/delete-gl-by-voucher").body(Mono.just(gl), Gl.class).retrieve().bodyToMono(String.class).subscribe((t) -> {
-            }, (e) -> log.info(e.getMessage()));
+            accountApi.post().uri("/account/delete-gl-by-voucher")
+                    .body(Mono.just(gl), Gl.class)
+                    .retrieve().bodyToMono(String.class)
+                    .subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
         }
 
     }
@@ -211,6 +219,7 @@ public class HMSIntegration {
 
     private void updateOPDCOA(String code, String status) {
         if (code != null) {
+            code = code.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
@@ -222,6 +231,7 @@ public class HMSIntegration {
 
     private void updateOTCOA(String code, String status) {
         if (code != null) {
+            code = code.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
@@ -233,6 +243,7 @@ public class HMSIntegration {
 
     private void updateDCCOA(String code, String status) {
         if (code != null) {
+            code = code.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
@@ -2185,8 +2196,10 @@ public class HMSIntegration {
                 coa.setMacId(MAC_ID);
                 coa.setOption("USR");
                 coa.setMigCode(String.valueOf(opd.getCatId()));
-                updateOPDCOA(saveCOA(coa), ACK);
-                log.info(String.format("sendOPDGroup: %s", opd.getCatName()));
+                saveCOA(coa).subscribe(s -> {
+                    updateOPDCOA(s, ACK);
+                    log.info(String.format("sendOPDGroup: %s", opd.getCatName()));
+                });
             } else {
                 log.info("coa parent is not assigned.");
             }
@@ -2198,6 +2211,9 @@ public class HMSIntegration {
             return false;
         }
         if (!otServiceRepo.searchGroup(groupId, Util1.getInteger(otPaidId)).isEmpty()) {
+            return false;
+        }
+        if (!otServiceRepo.searchGroup(groupId, Util1.getInteger(otRefundId)).isEmpty()) {
             return false;
         }
         return otServiceRepo.searchGroup(groupId, Util1.getInteger(otDiscountId)).isEmpty();
@@ -2223,8 +2239,11 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(groupId));
-                    updateOTCOA(saveCOA(coa), ACK);
-                    log.info(String.format("sendOTGroup: %s", ot.getGroupName()));
+                    saveCOA(coa).subscribe(s -> {
+                        updateOTCOA(s, ACK);
+                        log.info(String.format("sendOTGroup: %s", ot.getGroupName()));
+                    });
+
                 }
             } else {
                 log.info("coa parent is not assigned.");
@@ -2237,6 +2256,9 @@ public class HMSIntegration {
             return false;
         }
         if (!dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcDiscountId)).isEmpty()) {
+            return false;
+        }
+        if (!dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcRefundId)).isEmpty()) {
             return false;
         }
         return dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcPaidId)).isEmpty();
@@ -2262,7 +2284,9 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(dc.getGroupId()));
-                    updateDCCOA(saveCOA(coa), ACK);
+                    saveCOA(coa).subscribe(s -> {
+                        updateDCCOA(s, ACK);
+                    });
                     log.info(String.format("sendDCGroup: %s", dc.getGroupName()));
                 }
             } else {
