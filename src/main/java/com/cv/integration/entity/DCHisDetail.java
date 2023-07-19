@@ -30,6 +30,8 @@ public class DCHisDetail {
     private Double moFeeAmt;
     @Column(name = "qty")
     private Double qty;
+    @Column(name = "charge_type")
+    private Integer chargeType;
     public DCHisDetail() {
     }
 }

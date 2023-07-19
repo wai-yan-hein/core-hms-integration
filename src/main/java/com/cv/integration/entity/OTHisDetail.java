@@ -30,4 +30,6 @@ public class OTHisDetail implements java.io.Serializable {
     private Double moFeeAmt;
     @Column(name = "qty")
     private Double qty;
+    @Column(name = "charge_type")
+    private Integer chargeType;
 }

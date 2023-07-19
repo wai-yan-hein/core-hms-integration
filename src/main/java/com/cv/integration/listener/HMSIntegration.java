@@ -156,7 +156,6 @@ public class HMSIntegration {
                 String tranSource = response.getTranSource();
                 update(tranSource, code, ACK);
             }
-
         }
     }
 
@@ -195,23 +194,26 @@ public class HMSIntegration {
     }
 
 
-    private void deleteGl(String tranSource, String vouNo, String srcAcc) {
-        Gl gl = new Gl();
-        GlKey key = new GlKey();
-        key.setCompCode(compCode);
-        gl.setKey(key);
-        gl.setTranSource(tranSource);
-        gl.setRefNo(vouNo);
-        gl.setSrcAccCode(srcAcc);
-        if (srcAcc != null) {
-            accountApi.post().uri("/account/delete-gl-by-account")
-                    .body(Mono.just(gl), Gl.class).retrieve()
-                    .bodyToMono(String.class).subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
-        } else {
-            accountApi.post().uri("/account/delete-gl-by-voucher")
-                    .body(Mono.just(gl), Gl.class)
-                    .retrieve().bodyToMono(String.class)
-                    .subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
+    private void deleteGl(String tranSource, String vouNo,
+                          String srcAcc, Integer chargeType) {
+        if (chargeType == 2) {// mean FOC
+            Gl gl = new Gl();
+            GlKey key = new GlKey();
+            key.setCompCode(compCode);
+            gl.setKey(key);
+            gl.setTranSource(tranSource);
+            gl.setRefNo(vouNo);
+            gl.setSrcAccCode(srcAcc);
+            if (srcAcc != null) {
+                accountApi.post().uri("/account/delete-gl-by-account")
+                        .body(Mono.just(gl), Gl.class).retrieve()
+                        .bodyToMono(String.class).subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
+            } else {
+                accountApi.post().uri("/account/delete-gl-by-voucher")
+                        .body(Mono.just(gl), Gl.class)
+                        .retrieve().bodyToMono(String.class)
+                        .subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
+            }
         }
 
     }
@@ -465,7 +467,7 @@ public class HMSIntegration {
                     if (!listGl.isEmpty()) {
                         sendAccount(listGl);
                     } else {
-                        deleteGl(tranSource, vouNo, null);
+                        deleteGl(tranSource, vouNo, null, 2);
                         saleHisRepo.updateSale(vouNo, FOC);
                         log.info("FOC");
                     }
@@ -556,7 +558,7 @@ public class HMSIntegration {
                 if (!listGl.isEmpty()) {
                     sendAccount(listGl);
                 } else {
-                    deleteGl(tranSource, vouNo, null);
+                    deleteGl(tranSource, vouNo, null, 2);
                     purHisRepo.updatePurchase(vouNo, ACK);
                 }
             } else {
@@ -791,6 +793,7 @@ public class HMSIntegration {
                 if (!listOPD.isEmpty()) {
                     for (OPDHisDetail op : listOPD) {
                         OPDCategory cat = op.getService().getCategory();
+                        Integer chargeType = op.getChargeType();
                         String serviceId = String.valueOf(op.getService().getServiceId());
                         String serviceName = op.getService().getServiceName();
                         if (op.getRefer() != null) {
@@ -888,7 +891,7 @@ public class HMSIntegration {
                                 listGl.add(gl);
                             }
                         } else {
-                            deleteGl(tranSource, vouNo, srcAcc);
+                            deleteGl(tranSource, vouNo, srcAcc, chargeType);
                         }
                         //mo payable
                         if (!Util1.isNullOrEmpty(moAcc)) {
@@ -927,7 +930,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //staff payable
@@ -967,7 +970,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //tech payable
@@ -1007,7 +1010,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //refer payable
@@ -1047,7 +1050,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //refer payable
@@ -1086,7 +1089,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                     }
@@ -1125,11 +1128,11 @@ public class HMSIntegration {
                     if (!listGl.isEmpty()) {
                         sendAccount(listGl);
                     } else {
-                        deleteGl(tranSource, vouNo, null);
+                        deleteGl(tranSource, vouNo, null, 2);
                         opdHisRepo.updateOPD(vouNo, FOC);
                     }
                 } else {
-                    deleteGl(tranSource, vouNo, null);
+                    deleteGl(tranSource, vouNo, null, 2);
                     opdHisRepo.updateOPD(vouNo, ERR);
                 }
 
@@ -1187,6 +1190,7 @@ public class HMSIntegration {
                                 doctorName.append(" : ").append(d.getDoctor().getDoctorName());
                             }
                         }
+                        Integer chargeType = ot.getChargeType();
                         OTGroup group = ot.getService().getOtGroup();
                         Integer serviceId = ot.getService().getServiceId();
                         String serviceName = ot.getService().getServiceName();
@@ -1376,7 +1380,7 @@ public class HMSIntegration {
                                     listGl.add(gl);
                                 }
                             } else {
-                                deleteGl(tranSource, vouNo, srcAcc);
+                                deleteGl(tranSource, vouNo, srcAcc, chargeType);
                             }
                         }
                         //mo payable
@@ -1416,7 +1420,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //staff payable
@@ -1456,7 +1460,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //nurse payable
@@ -1496,14 +1500,14 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                     }//loop
                     if (!listGl.isEmpty()) {
                         sendAccount(listGl);
                     } else {
-                        deleteGl(tranSource, vouNo, null);
+                        deleteGl(tranSource, vouNo, null, 2);
                         otHisRepo.updateOT(vouNo, FOC);
                     }
                 } else {
@@ -1561,6 +1565,7 @@ public class HMSIntegration {
                                 doctorName.append(" : ").append(d.getDoctor().getDoctorName());
                             }
                         }
+                        Integer chargeType = dc.getChargeType();
                         DCGroup group = dc.getService().getDcGroup();
                         String serviceName = dc.getService().getServiceName();
                         Integer serviceId = dc.getService().getServiceId();
@@ -1778,7 +1783,7 @@ public class HMSIntegration {
                                     listGl.add(gl);
                                 }
                             } else {
-                                deleteGl(tranSource, vouNo, srcAcc);
+                                deleteGl(tranSource, vouNo, srcAcc, chargeType);
                             }
                         }
                         //mo payable
@@ -1818,7 +1823,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //tech payable
@@ -1858,7 +1863,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                         //nurse payable
@@ -1898,7 +1903,7 @@ public class HMSIntegration {
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
                             } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                                deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
                     }
@@ -1906,7 +1911,7 @@ public class HMSIntegration {
                         sendAccount(listGl);
                         log.info(String.format("sendDCVoucherToAccount: %s", vouNo));
                     } else {
-                        deleteGl(tranSource, vouNo, null);
+                        deleteGl(tranSource, vouNo, null, 2);
                         dcHisRepo.updateDC(vouNo, FOC);
                     }
                 } else {
@@ -2009,7 +2014,7 @@ public class HMSIntegration {
             String tranSource = ge.isUnpaid() ? "UNPAID" : "EXPENSE";
             String geneId = ge.getGenId().toString();
             if (ge.isDeleted()) {
-                deleteGl(tranSource, geneId, null);
+                deleteGl(tranSource, geneId, null, 2);
             } else {
                 List<Gl> listGl = new ArrayList<>();
                 String description = ge.getDescription();
