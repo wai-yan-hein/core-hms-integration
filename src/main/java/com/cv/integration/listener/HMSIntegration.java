@@ -831,11 +831,13 @@ public class HMSIntegration {
                             key.setDeptId(1);
                             key.setCompCode(compCode);
                             gl.setKey(key);
+                            gl.setDescription(serviceName);
                             //cash
                             gl.setAccCode(srcAcc);
                             if (amount > 0) {
                                 gl.setDrAmt(amount);
                             } else {
+                                gl.setDescription("Return : " + serviceName);
                                 gl.setCrAmt(amount * -1);
                             }
                             if (paymentId == 1) {
@@ -853,7 +855,6 @@ public class HMSIntegration {
                             gl.setCreatedBy(APP_NAME);
                             gl.setCurCode(curCode);
                             gl.setRefNo(vouNo);
-                            gl.setDescription(serviceName);
                             gl.setCreatedDate(LocalDateTime.now());
                             gl.setTranSource(tranSource);
                             gl.setReference(reference);
@@ -1053,7 +1054,7 @@ public class HMSIntegration {
                                 deleteGl(tranSource, vouNo, sAcc, chargeType);
                             }
                         }
-                        //refer payable
+                        //reader payable
                         if (!Util1.isNullOrEmpty(readerAcc)) {
                             double readerAmt = percent ? amount * Util1.getDouble(op.getReadFeeAmt()) / 100 : Util1.getDouble(op.getReadFeeAmt()) * qty;
                             String[] accounts = readerAcc.split(",");
@@ -1068,9 +1069,11 @@ public class HMSIntegration {
                                 gl.setGlDate(vouDate);
                                 gl.setSrcAccCode(sAcc);
                                 gl.setAccCode(acc);
+                                gl.setDescription(serviceName);
                                 if (readerAmt > 0) {
                                     gl.setCrAmt(readerAmt);
                                 } else {
+                                    gl.setDescription("Return : " + serviceName);
                                     gl.setDrAmt(readerAmt * -1);
                                 }
                                 gl.setRefNo(vouNo);
@@ -1079,7 +1082,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setCurCode(curCode);
                                 gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
