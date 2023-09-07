@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.function.ServerResponse;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.io.File;
 import java.io.IOException;
@@ -57,6 +60,11 @@ public class ReportController {
     @PostMapping("/get-dc")
     public ResponseEntity<List<Voucher>> getDCVoucher(@RequestParam String vouNo) throws SQLException {
         return ResponseEntity.ok(reportService.getDCVoucher(vouNo));
+    }
+
+    @GetMapping("/checkError")
+    public Flux<?> checkError() {
+        return Flux.empty();
     }
 
 }

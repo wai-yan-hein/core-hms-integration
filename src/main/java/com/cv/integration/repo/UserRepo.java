@@ -15,14 +15,13 @@ import java.util.List;
 @Component
 public class UserRepo {
     private final HashMap<String, String> hmKey = new HashMap<>();
-    int min = 1;
     @Autowired
     private WebClient userApi;
 
 
     public String getProperty(String key, String compCode) {
         if (hmKey.isEmpty()) {
-            Mono<List<SystemProperty>> result = userApi.get().uri(builder -> builder.path("/user/get-system-property")
+            Mono<List<SystemProperty>> result = userApi.get().uri(builder -> builder.path("/user/getSystemProperty")
                             .queryParam("compCode", compCode)
                             .build())
                     .retrieve().bodyToFlux(SystemProperty.class)

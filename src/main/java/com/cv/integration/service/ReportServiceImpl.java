@@ -2,6 +2,7 @@ package com.cv.integration.service;
 
 import com.cv.integration.common.Util1;
 import com.cv.integration.common.Voucher;
+import com.cv.integration.model.ErrorMessage;
 import com.cv.integration.model.VoucherInfo;
 import com.cv.integration.mongo.model.Doctor;
 import com.cv.integration.mongo.model.PatientInfo;
@@ -476,7 +477,8 @@ public class ReportServiceImpl implements ReportService {
         } catch (Exception e) {
             log.error("getReturnInList : " + e.getMessage());
         }
-        return list;    }
+        return list;
+    }
 
     @Override
     public List<VoucherInfo> getReturnOutList(String fromDate, String toDate) {
@@ -500,7 +502,8 @@ public class ReportServiceImpl implements ReportService {
         } catch (Exception e) {
             log.error("getReturnOutList : " + e.getMessage());
         }
-        return list;    }
+        return list;
+    }
 
     @Override
     public List<VoucherInfo> getOPDList(String fromDate, String toDate) {
@@ -576,6 +579,7 @@ public class ReportServiceImpl implements ReportService {
         }
         return list;
     }
+
     @Override
     public List<VoucherInfo> getPaymentList(String fromDate, String toDate) {
         List<VoucherInfo> list = new ArrayList<>();
@@ -598,6 +602,15 @@ public class ReportServiceImpl implements ReportService {
             log.error("getDCList : " + e.getMessage());
         }
         return list;
+    }
+
+    @Override
+    public List<ErrorMessage> getErrorMessage() {
+        return null;
+    }
+    private List<ErrorMessage> getDiscountError(){
+        String sql="";
+        return  new ArrayList<>();
     }
 
 

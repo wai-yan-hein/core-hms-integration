@@ -17,4 +17,6 @@ public class TraderGroup {
     private String accountId;
     @Column(name = "dept_id")
     private String deptCode;
+    @Column(name = "trader_code")
+    private String traderCode;
 }

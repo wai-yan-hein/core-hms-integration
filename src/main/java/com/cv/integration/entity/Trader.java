@@ -1,18 +1,13 @@
 package com.cv.integration.entity;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
 import org.hibernate.Hibernate;
 
 import jakarta.persistence.*;
+
 import java.util.Objects;
 
-@Getter
-@Setter
-@ToString
-@RequiredArgsConstructor
+@Data
 @Entity
 @Table(name = "trader")
 public class Trader {
@@ -32,17 +27,6 @@ public class Trader {
     @ManyToOne
     @JoinColumn(name = "group_id")
     private TraderGroup traderGroup;
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || Hibernate.getClass(this) != Hibernate.getClass(o)) return false;
-        Trader trader = (Trader) o;
-        return Objects.equals(traderCode, trader.traderCode);
-    }
-
-    @Override
-    public int hashCode() {
-        return 0;
-    }
+    @Column(name = "account_code")
+    private String account;
 }

@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -136,7 +135,7 @@ public class HMSIntegration {
 
     private void sendAccount(List<Gl> glList) {
         if (!glList.isEmpty()) {
-            Response response = accountApi.post().uri("/account/save-gl-list")
+            Response response = accountApi.post().uri("/account/saveGlList")
                     .body(Mono.just(glList), List.class)
                     .retrieve()
                     .bodyToMono(Response.class)
@@ -162,7 +161,6 @@ public class HMSIntegration {
 
     private void update(String tranSource, String code, String status) {
         switch (tranSource) {
-            case "TRADER" -> updateTrader(code, status);
             case "SALE" -> updateSale(code, status);
             case "PURCHASE" -> updatePurchase(code, status);
             case "RETURN_IN" -> updateReturnIn(code, status);
@@ -170,7 +168,7 @@ public class HMSIntegration {
             case "OPD" -> updateOPD(code, status);
             case "OT" -> updateOT(code, status);
             case "DC" -> updateDC(code, status);
-            case "OPD_RECEIVE" -> updateOPDReceive(Integer.parseInt(code), status);
+            case "BILL_PAYMENT" -> updateOPDReceive(Integer.parseInt(code), status);
             case "EXPENSE", "UNPAID" -> updateExpense(Integer.parseInt(code), status);
             case "PAYMENT" -> updatePayment(Integer.parseInt(code), status);
             case "OPENING" -> updateOpening(code, status);
@@ -181,14 +179,14 @@ public class HMSIntegration {
     }
 
     public Mono<String> saveCOA(ChartOfAccount coa) {
-        return accountApi.post().uri("/account/process-coa")
+        return accountApi.post().uri("/account/processCOA")
                 .body(Mono.just(coa), ChartOfAccount.class)
                 .retrieve()
                 .bodyToMono(String.class);
     }
 
     public void saveOpening(COAOpening op) {
-        op = accountApi.post().uri("/account/save-opening").body(Mono.just(op), COAOpening.class).retrieve().bodyToMono(COAOpening.class).block();
+        op = accountApi.post().uri("/account/saveOpening").body(Mono.just(op), COAOpening.class).retrieve().bodyToMono(COAOpening.class).block();
         assert op != null;
         updateOpening(op.getTraderCode(), ACK);
     }
@@ -205,11 +203,11 @@ public class HMSIntegration {
             gl.setRefNo(vouNo);
             gl.setSrcAccCode(srcAcc);
             if (srcAcc != null) {
-                accountApi.post().uri("/account/delete-gl-by-account")
+                accountApi.post().uri("/account/deleteGlByAccount")
                         .body(Mono.just(gl), Gl.class).retrieve()
                         .bodyToMono(String.class).subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
             } else {
-                accountApi.post().uri("/account/delete-gl-by-voucher")
+                accountApi.post().uri("/account/deleteGlByVoucher")
                         .body(Mono.just(gl), Gl.class)
                         .retrieve().bodyToMono(String.class)
                         .subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
@@ -313,10 +311,10 @@ public class HMSIntegration {
                 accTrader.setTraderType(traderType);
                 accTrader.setAccount(traderType.equals("C") ? getCustomerAcc() : getSupplierAcc());
                 try {
-                    Mono<AccTrader> result = accountApi.post().uri("/account/save-trader").body(Mono.just(accTrader), AccTrader.class).retrieve().bodyToMono(AccTrader.class).doOnError((e) -> log.error(e.getMessage()));
+                    Mono<AccTrader> result = accountApi.post().uri("/account/saveTrader").body(Mono.just(accTrader), AccTrader.class).retrieve().bodyToMono(AccTrader.class).doOnError((e) -> log.error(e.getMessage()));
                     AccTrader trader = result.block();
                     assert trader != null;
-                    updateTrader(t.getTraderCode(), ACK);
+                    updateTrader(trader);
                 } catch (Exception e) {
                     log.error("sendTrader : " + e.getMessage());
                 }
@@ -334,9 +332,18 @@ public class HMSIntegration {
     }
 
 
-    private void updateTrader(String traderCode, String status) {
-        traderRepo.updateTrader(traderCode, status);
-        log.info(String.format("updateTrader: %s", traderCode));
+    private void updateTrader(AccTrader accTrader) {
+        String traderCode = accTrader.getKey().getCode();
+        Optional<Trader> optionalTrader = traderRepo.findById(traderCode);
+        if (optionalTrader.isPresent()) {
+            Trader t = optionalTrader.get();
+            t.setIntgUpdStatus("ACK");
+            t.setAccount(accTrader.getAccount());
+            traderRepo.save(t);
+            log.info(String.format("updateTrader: %s", traderCode));
+        } else {
+            log.error(String.format("Trader with code %s not found in the repository.", traderCode));
+        }
     }
 
 
@@ -365,11 +372,17 @@ public class HMSIntegration {
                     srcAcc = Util1.isNull(accCodeByLoc, srcAcc);
                     deptCode = Util1.isNull(deptCodeByLoc, deptCode);
                     String patientType = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    if (!Objects.isNull(sh.getPatient())) {
-                        String patientNo = sh.getPatient().getPatientNo();
-                        String patientName = sh.getPatient().getPatientName();
+                    Patient p = sh.getPatient();
+                    if (!Objects.isNull(p)) {
+                        String patientNo = p.getPatientNo();
+                        String patientName = p.getPatientName();
                         traderCode = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? outPatientCode : inPatientCode;
                         reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                        TraderGroup g = p.getGroup();
+                        if (g != null) {
+                            traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                            balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                        }
                     } else if (appType.equals("H")) {
                         if (Util1.isNullOrEmpty(traderByLoc)) {
                             reference = String.format("%s : %s : (%s)", "-", Util1.isNull(sh.getName(), "-"), patientType);
@@ -378,6 +391,7 @@ public class HMSIntegration {
                     } else {
                         Trader trader = sh.getTrader();
                         traderCode = trader.getTraderCode();
+                        balAcc = Util1.isNull(trader.getAccount(), balAcc);
                     }
                     String curCode = sh.getCurrency().getAccCurCode();
                     boolean deleted = sh.isDeleted();
@@ -501,6 +515,7 @@ public class HMSIntegration {
                 double vouBalAmt = Util1.getDouble(ph.getVouBalance());
                 Trader trader = ph.getTrader();
                 String traderCode = trader.getTraderCode();
+                balAcc = Util1.isNull(trader.getAccount(), balAcc);
                 String reference = ph.getRemark();
                 String deptCodeByLoc = ph.getLocation().getDeptCode();
                 String accByLoc = ph.getLocation().getPurAccount();
@@ -585,12 +600,18 @@ public class HMSIntegration {
                 LocalDateTime vouDate = ri.getVouDate();
                 String traderCode;
                 String reference = null;
-                if (!Objects.isNull(ri.getPatient())) {
-                    String patientNo = ri.getPatient().getPatientNo();
-                    String patientName = ri.getPatient().getPatientName();
+                Patient p = ri.getPatient();
+                if (!Objects.isNull(p)) {
+                    String patientNo = p.getPatientNo();
+                    String patientName = p.getPatientName();
                     String patientType = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     traderCode = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? outPatientCode : inPatientCode;
                     reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                    TraderGroup g = p.getGroup();
+                    if (g != null) {
+                        traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                        balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                    }
                 } else if (appType.equals("H")) {
                     String patientType = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     reference = String.format("%s : %s : (%s)", "-", "-", patientType);
@@ -598,7 +619,7 @@ public class HMSIntegration {
                 } else {
                     Trader trader = ri.getTrader();
                     traderCode = trader.getTraderCode();
-
+                    balAcc = Util1.isNull(trader.getAccount(), balAcc);
                 }
                 String curCode = ri.getCurrency().getAccCurCode();
                 boolean deleted = ri.isDeleted();
@@ -691,6 +712,7 @@ public class HMSIntegration {
                 double vouBalAmt = Util1.getDouble(ro.getVouBalance());
                 Trader trader = ro.getTrader();
                 String traderCode = trader.getTraderCode();
+                balAcc = Util1.isNull(trader.getAccount(), balAcc);
                 String reference = ro.getRemark();
                 String deptCodeByLoc = ro.getLocation().getDeptCode();
                 String accByLoc = ro.getLocation().getAccCode();
@@ -775,10 +797,16 @@ public class HMSIntegration {
                 String reference;
                 String patientNo = null;
                 String doctorId = oh.getDoctorId();
-                if (!Objects.isNull(oh.getPatient())) {
-                    patientNo = oh.getPatient().getPatientNo();
-                    String patientName = oh.getPatient().getPatientName();
+                Patient p = oh.getPatient();
+                if (!Objects.isNull(p)) {
+                    patientNo = p.getPatientNo();
+                    String patientName = p.getPatientName();
                     reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                    TraderGroup g = p.getGroup();
+                    if (g != null) {
+                        traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                        balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                    }
                 } else {
                     reference = String.format("%s : %s : (%s)", "-", Util1.isNull(oh.getPatientName(), "-"), patientType);
                 }
@@ -1167,11 +1195,17 @@ public class HMSIntegration {
                 String reference;
                 String patientNo = null;
                 String doctorId = oh.getDoctorId();
-                if (!Objects.isNull(oh.getPatient())) {
-                    patientNo = oh.getPatient().getPatientNo();
-                    String patientName = oh.getPatient().getPatientName();
+                Patient p = oh.getPatient();
+                if (!Objects.isNull(p)) {
+                    patientNo = p.getPatientNo();
+                    String patientName = p.getPatientName();
                     String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                    TraderGroup g = p.getGroup();
+                    if (g != null) {
+                        traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                        balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                    }
                 } else {
                     String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     reference = String.format("%s : %s : (%s)", "-", "-", patientType);
@@ -1544,11 +1578,17 @@ public class HMSIntegration {
                 String reference;
                 String patientNo = null;
                 String doctorId = oh.getDoctorId();
-                if (!Objects.isNull(oh.getPatient())) {
-                    patientNo = oh.getPatient().getPatientNo();
-                    String patientName = oh.getPatient().getPatientName();
+                Patient p = oh.getPatient();
+                if (!Objects.isNull(p)) {
+                    patientNo = p.getPatientNo();
+                    String patientName = p.getPatientName();
                     String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                    TraderGroup g = p.getGroup();
+                    if (g != null) {
+                        traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                        balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                    }
                 } else {
                     String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     reference = String.format("%s : %s : (%s)", "-", "-", patientType);
@@ -1951,7 +1991,6 @@ public class HMSIntegration {
                 balAcc = ac.getBalanceAcc();
                 traderCode = inPatientCode;
                 description = "Inpatient Bill";
-
             } else {
                 tranSource = "OPD";
                 AccountSetting ac = hmAccSetting.get(tranSource);
@@ -1962,10 +2001,16 @@ public class HMSIntegration {
                 description = "Outpatient Bill";
             }
             String reference = null;
-            if (!Objects.isNull(receive.getPatient())) {
+            Patient p = receive.getPatient();
+            if (!Objects.isNull(p)) {
                 String patientNo = receive.getPatient().getPatientNo();
                 String patientName = receive.getPatient().getPatientName();
                 reference = String.format("%s : %s", patientNo, patientName);
+                TraderGroup g = p.getGroup();
+                if (g != null) {
+                    traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                    balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                }
             }
             if (payAmt != 0) {
                 List<Gl> list = new ArrayList<>();
@@ -1989,9 +2034,8 @@ public class HMSIntegration {
                 gl.setMacId(MAC_ID);
                 gl.setCreatedBy(APP_NAME);
                 gl.setCurCode(curCode);
-                gl.setDescription(description);
                 gl.setCreatedDate(LocalDateTime.now());
-                gl.setTranSource(tranSource);
+                gl.setTranSource("BILL_PAYMENT");
                 gl.setReference(reference);
                 gl.setTraderCode(traderCode);
                 gl.setDeleted(deleted);
@@ -2008,7 +2052,7 @@ public class HMSIntegration {
 
     private void updateOPDReceive(Integer id, String status) {
         opdReceiveRepo.updateOPD(id, status);
-        log.info(String.format("updateOPDReceive: %s", id));
+        log.info(String.format("updateOPDPayment: %s", id));
     }
 
     public void sendGeneralExpenseToAcc(GenExpense ge) {
@@ -2027,9 +2071,9 @@ public class HMSIntegration {
                 String depCode = ge.getDeptCode();
                 String curCode = ge.getCurrency() == null ? "MMK" : ge.getCurrency().getAccCurCode();
                 String expenseId = ge.getGenId().toString();
-                double expAmt = ge.getExpAmt();
+                double expAmt = Util1.getDouble(ge.getExpAmt());
                 boolean deleted = ge.isDeleted();
-                if (Util1.getDouble(expAmt) > 0) {
+                if (expAmt != 0) {
                     Gl gl = new Gl();
                     GlKey key = new GlKey();
                     key.setDeptId(1);
@@ -2038,13 +2082,18 @@ public class HMSIntegration {
                     gl.setGlDate(expDate);
                     gl.setSrcAccCode(srcAcc);
                     gl.setAccCode(account);
-                    gl.setCrAmt(expAmt);
+                    gl.setDescription(description);
+                    if (expAmt > 0) {
+                        gl.setCrAmt(expAmt);
+                    } else {
+                        gl.setDescription("Return : " + description);
+                        gl.setDrAmt(expAmt * -1);
+                    }
                     gl.setRefNo(expenseId);
                     gl.setDeptCode(depCode);
                     gl.setMacId(MAC_ID);
                     gl.setCreatedBy(APP_NAME);
                     gl.setCurCode(curCode);
-                    gl.setDescription(description);
                     gl.setCreatedDate(LocalDateTime.now());
                     gl.setTranSource(tranSource);
                     gl.setReference(remark);
@@ -2142,6 +2191,8 @@ public class HMSIntegration {
                     gl.setDeleted(deleted);
                     gl.setCash(true);
                     listGl.add(gl);
+                } else {
+                    updatePayment(payId, ERR);
                 }
                 if (discount > 0) {
                     Gl gl = new Gl();
