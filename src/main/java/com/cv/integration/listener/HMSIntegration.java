@@ -250,7 +250,6 @@ public class HMSIntegration {
             dcGroupRepo.updateDCGroup(groupId, status, coaCode);
             log.info(String.format("updateDCCOA: %s", code));
         }
-
     }
 
     private void updateOpening(String code, String status) {
@@ -373,6 +372,7 @@ public class HMSIntegration {
                     deptCode = Util1.isNull(deptCodeByLoc, deptCode);
                     String patientType = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     Patient p = sh.getPatient();
+                    Trader trader = sh.getTrader();
                     if (!Objects.isNull(p)) {
                         String patientNo = p.getPatientNo();
                         String patientName = p.getPatientName();
@@ -383,15 +383,14 @@ public class HMSIntegration {
                             traderCode = Util1.isNull(g.getTraderCode(), traderCode);
                             balAcc = Util1.isNull(g.getAccountId(), balAcc);
                         }
+                    } else if (trader != null) {
+                        traderCode = trader.getTraderCode();
+                        balAcc = Util1.isNull(trader.getAccount(), balAcc);
                     } else if (appType.equals("H")) {
                         if (Util1.isNullOrEmpty(traderByLoc)) {
                             reference = String.format("%s : %s : (%s)", "-", Util1.isNull(sh.getName(), "-"), patientType);
                             traderCode = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? outPatientCode : inPatientCode;
                         }
-                    } else {
-                        Trader trader = sh.getTrader();
-                        traderCode = trader.getTraderCode();
-                        balAcc = Util1.isNull(trader.getAccount(), balAcc);
                     }
                     String curCode = sh.getCurrency().getAccCurCode();
                     boolean deleted = sh.isDeleted();
@@ -598,9 +597,10 @@ public class HMSIntegration {
                 String balAcc = setting.getBalanceAcc();
                 String deptCode = setting.getDeptCode();
                 LocalDateTime vouDate = ri.getVouDate();
-                String traderCode;
+                String traderCode = null;
                 String reference = null;
                 Patient p = ri.getPatient();
+                Trader trader = ri.getTrader();
                 if (!Objects.isNull(p)) {
                     String patientNo = p.getPatientNo();
                     String patientName = p.getPatientName();
@@ -612,14 +612,13 @@ public class HMSIntegration {
                         traderCode = Util1.isNull(g.getTraderCode(), traderCode);
                         balAcc = Util1.isNull(g.getAccountId(), balAcc);
                     }
+                } else if (trader != null) {
+                    traderCode = trader.getTraderCode();
+                    balAcc = Util1.isNull(trader.getAccount(), balAcc);
                 } else if (appType.equals("H")) {
                     String patientType = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? "Outpatient" : "Inpatient";
                     reference = String.format("%s : %s : (%s)", "-", "-", patientType);
                     traderCode = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                } else {
-                    Trader trader = ri.getTrader();
-                    traderCode = trader.getTraderCode();
-                    balAcc = Util1.isNull(trader.getAccount(), balAcc);
                 }
                 String curCode = ri.getCurrency().getAccCurCode();
                 boolean deleted = ri.isDeleted();
@@ -2254,12 +2253,12 @@ public class HMSIntegration {
                 coa.setMacId(MAC_ID);
                 coa.setOption("USR");
                 coa.setMigCode(String.valueOf(opd.getCatId()));
-                saveCOA(coa).subscribe(s -> {
+                saveCOA(coa).doOnSuccess(s -> {
                     updateOPDCOA(s, ACK);
                     log.info(String.format("sendOPDGroup: %s", opd.getCatName()));
-                });
+                }).block();
             } else {
-                log.info("coa parent is not assigned.");
+                log.info("coa parent is not assigned at opd");
             }
         }
     }
@@ -2297,14 +2296,14 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(groupId));
-                    saveCOA(coa).subscribe(s -> {
+                    saveCOA(coa).doOnSuccess(s -> {
                         updateOTCOA(s, ACK);
                         log.info(String.format("sendOTGroup: %s", ot.getGroupName()));
-                    });
+                    }).block();
 
                 }
             } else {
-                log.info("coa parent is not assigned.");
+                log.info("coa parent is not assigned at ot.");
             }
         }
     }
@@ -2342,13 +2341,11 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(dc.getGroupId()));
-                    saveCOA(coa).subscribe(s -> {
-                        updateDCCOA(s, ACK);
-                    });
+                    saveCOA(coa).doOnSuccess(s -> updateDCCOA(s, ACK)).block();
                     log.info(String.format("sendDCGroup: %s", dc.getGroupName()));
                 }
             } else {
-                log.info("coa parent is not assigned.");
+                log.info("coa parent is not assigned at dc.");
             }
         }
     }
