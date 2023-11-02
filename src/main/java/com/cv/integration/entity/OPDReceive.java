@@ -34,6 +34,8 @@ public class OPDReceive implements java.io.Serializable {
     private String intgUpdStatus;
     @Column(name = "deleted")
     private boolean deleted;
+    @Column(name = "discount")
+    private Double discount;
 
     public OPDReceive() {
     }

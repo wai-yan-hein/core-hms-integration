@@ -1973,6 +1973,7 @@ public class HMSIntegration {
             Integer id = receive.getBillId();
             LocalDateTime vouDate = receive.getPayDate();
             double payAmt = Util1.getDouble(receive.getPayAmt());
+            double discount = Util1.getDouble(receive.getDiscount());
             String regNo = receive.getPatient().getPatientNo();
             String curCode = receive.getCurrency().getAccCurCode();
             boolean deleted = receive.isDeleted();
@@ -2011,8 +2012,8 @@ public class HMSIntegration {
                     balAcc = Util1.isNull(g.getAccountId(), balAcc);
                 }
             }
+            List<Gl> list = new ArrayList<>();
             if (payAmt != 0) {
-                List<Gl> list = new ArrayList<>();
                 Gl gl = new Gl();
                 GlKey key = new GlKey();
                 key.setDeptId(1);
@@ -2041,9 +2042,37 @@ public class HMSIntegration {
                 gl.setCash(true);
                 gl.setPatientNo(regNo);
                 list.add(gl);
-                log.info(String.format("sendOPDReceiveToAccount: %s", id));
-                sendAccount(list);
             }
+            if (discount != 0) {
+                Gl gl = new Gl();
+                GlKey key = new GlKey();
+                key.setDeptId(1);
+                key.setCompCode(compCode);
+                gl.setKey(key);
+                gl.setGlDate(vouDate);
+                gl.setDescription(String.format("%s %s", description, "Discount"));
+                gl.setSrcAccCode(cashAcc);
+                gl.setAccCode(balAcc);
+                gl.setCrAmt(discount);
+                gl.setRefNo(String.valueOf(id));
+                gl.setDeptCode(deptCode);
+                gl.setMacId(MAC_ID);
+                gl.setCreatedBy(APP_NAME);
+                gl.setCurCode(curCode);
+                gl.setCreatedDate(LocalDateTime.now());
+                gl.setTranSource("BILL_PAYMENT");
+                gl.setReference(reference);
+                gl.setTraderCode(traderCode);
+                gl.setDeleted(deleted);
+                gl.setCash(true);
+                gl.setPatientNo(regNo);
+                list.add(gl);
+            }
+            if (!list.isEmpty()) {
+                sendAccount(list);
+                log.info(String.format("sendOPDReceiveToAccount: %s", id));
+            }
+
 
         }
     }
