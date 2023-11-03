@@ -812,7 +812,8 @@ public class HMSIntegration {
                 String curCode = oh.getCurrency().getAccCurCode();
                 boolean deleted = oh.isDeleted();
                 double vouDisAmt = Util1.getDouble(oh.getVouDiscount());
-                double vouBalAmt = Util1.getDouble(oh.getVouBalance());
+                double vouPaid = Util1.getDouble(oh.getVouPaid());
+                double vouTotal = Util1.getDouble(oh.getVouTotal());
                 boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
                 Integer paymentId = oh.getPaymentId();
                 List<Gl> listGl = new ArrayList<>();
@@ -867,7 +868,7 @@ public class HMSIntegration {
                                 gl.setDescription("Return : " + serviceName);
                                 gl.setCrAmt(amount * -1);
                             }
-                            if (paymentId == 1) {
+                            if (paymentId == 1 && vouTotal == vouPaid) {
                                 gl.setSrcAccCode(payAcc);
                                 gl.setCash(true);
                             } else {
@@ -1129,18 +1130,44 @@ public class HMSIntegration {
                         key.setDeptId(1);
                         key.setCompCode(compCode);
                         gl.setKey(key);
-                        if (vouBalAmt > 0) {
-                            gl.setSrcAccCode(balAcc);
-                            gl.setAccCode(disAcc);
-                            gl.setTraderCode(traderCode);
-                        } else {
+                        if (paymentId == 1 && vouTotal == vouPaid) {
                             gl.setSrcAccCode(payAcc);
                             gl.setAccCode(disAcc);
                             gl.setCash(true);
+                        } else {
+                            gl.setSrcAccCode(balAcc);
+                            gl.setAccCode(disAcc);
+                            gl.setTraderCode(traderCode);
                         }
                         gl.setGlDate(vouDate);
                         gl.setDescription("OPD Voucher Discount");
                         gl.setCrAmt(vouDisAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(reference);
+                        gl.setDeptCode(mainDept);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setDeleted(deleted);
+                        gl.setMacId(MAC_ID);
+                        gl.setDoctorId(doctorId);
+                        gl.setPatientNo(patientNo);
+                        listGl.add(gl);
+                    }
+                    //paid
+                    if (vouPaid != vouTotal) {
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setSrcAccCode(payAcc);
+                        gl.setAccCode(balAcc);
+                        gl.setCash(true);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("OPD Partial Paid");
+                        gl.setDrAmt(vouPaid);
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(mainDept);
