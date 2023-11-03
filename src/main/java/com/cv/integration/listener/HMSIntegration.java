@@ -1981,6 +1981,7 @@ public class HMSIntegration {
             String deptCode;
             String cashAcc;
             String balAcc;
+            String disAcc;
             String traderCode;
             String description;
             if (reportService.isAdmission(Util1.toDateStr(vouDate), regNo, id)) {
@@ -1990,6 +1991,7 @@ public class HMSIntegration {
                 cashAcc = ac.getPayAcc();
                 balAcc = ac.getBalanceAcc();
                 traderCode = inPatientCode;
+                disAcc = ac.getDiscountAcc();
                 description = "Inpatient Bill";
             } else {
                 tranSource = "OPD";
@@ -1998,6 +2000,7 @@ public class HMSIntegration {
                 cashAcc = ac.getPayAcc();
                 balAcc = ac.getBalanceAcc();
                 traderCode = outPatientCode;
+                disAcc = ac.getDiscountAcc();
                 description = "Outpatient Bill";
             }
             String reference = null;
@@ -2051,9 +2054,9 @@ public class HMSIntegration {
                 gl.setKey(key);
                 gl.setGlDate(vouDate);
                 gl.setDescription(String.format("%s %s", description, "Discount"));
-                gl.setSrcAccCode(cashAcc);
+                gl.setSrcAccCode(disAcc);
                 gl.setAccCode(balAcc);
-                gl.setCrAmt(discount);
+                gl.setDrAmt(discount);
                 gl.setRefNo(String.valueOf(id));
                 gl.setDeptCode(deptCode);
                 gl.setMacId(MAC_ID);
