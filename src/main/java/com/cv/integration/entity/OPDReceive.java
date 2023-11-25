@@ -36,6 +36,8 @@ public class OPDReceive implements java.io.Serializable {
     private boolean deleted;
     @Column(name = "discount")
     private Double discount;
+    @Column(name = "adjust")
+    private Boolean adjust;
 
     public OPDReceive() {
     }

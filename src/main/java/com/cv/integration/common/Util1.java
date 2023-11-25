@@ -10,11 +10,11 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
 import java.util.Date;
@@ -44,7 +44,7 @@ public class Util1 {
         return Calendar.getInstance().getTime();
     }
 
-    public static String  toDateStr(LocalDateTime date) {
+    public static String toDateStr(LocalDateTime date) {
         if (date != null) {
             // Define the formatter for the desired date format
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -66,12 +66,11 @@ public class Util1 {
         return date;
     }
 
-    public static boolean getBoolean(String obj) {
-        boolean status = false;
-        if (!Strings.isNullOrEmpty(obj)) {
-            status = obj.equals("1") || obj.equalsIgnoreCase("true");
+    public static boolean getBoolean(Object obj) {
+        if (obj == null) {
+            return false;
         }
-        return status;
+        return obj.toString().equals("1") || obj.toString().equalsIgnoreCase("true");
 
     }
 
@@ -96,5 +95,34 @@ public class Util1 {
         return IOUtils.toByteArray(new FileInputStream(exportPath));
     }
 
+    public static Date convertToDate(LocalDateTime localDateTime) {
+        if (localDateTime != null) {
+            ZoneId zoneId = ZoneId.systemDefault();
+            ZonedDateTime zonedDateTime = localDateTime.atZone(zoneId);
 
+            // Set the time to midnight (00:00:00)
+            zonedDateTime = zonedDateTime.with(LocalTime.MIDNIGHT);
+
+            return Date.from(zonedDateTime.toInstant());
+        }
+        return null;
+    }
+
+    public static Date toDate(String str, String format) {
+        if (str != null) {
+            DateFormat dateFormat = new SimpleDateFormat(format);
+            try {
+                return dateFormat.parse(str);
+            } catch (ParseException e) {
+                log.error("toDate : " + e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    public static boolean compareDate(LocalDateTime dateTime, String syncDate) {
+        Date d1 = convertToDate(dateTime);
+        Date d2 = toDate(syncDate, "yyyy-MM-dd");
+        return d1.compareTo(d2) >= 0;
+    }
 }
