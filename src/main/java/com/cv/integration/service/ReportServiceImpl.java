@@ -2,6 +2,8 @@ package com.cv.integration.service;
 
 import com.cv.integration.common.Util1;
 import com.cv.integration.common.Voucher;
+import com.cv.integration.model.ErrorMessage;
+import com.cv.integration.model.VoucherInfo;
 import com.cv.integration.mongo.model.Doctor;
 import com.cv.integration.mongo.model.PatientInfo;
 import com.cv.integration.mongo.model.Region;
@@ -401,6 +403,214 @@ public class ReportServiceImpl implements ReportService {
         }
 
         return admission;
+    }
+
+    @Override
+    public List<VoucherInfo> getSaleList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select sale_inv_id,vou_total\n" +
+                "from sale_his\n" +
+                "where date(sale_date) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "and vou_total <>0\n" +
+                "order by sale_inv_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("sale_inv_id"))
+                        .vouTotal(rs.getDouble("vou_total"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getSaleList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<VoucherInfo> getPurchaseList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select pur_inv_id,vou_total\n" +
+                "from pur_his\n" +
+                "where date(pur_date) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "and vou_total <>0\n" +
+                "order by pur_inv_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("pur_inv_id"))
+                        .vouTotal(rs.getDouble("vou_total"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getPurchaseList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<VoucherInfo> getReturnInList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select ret_in_id,vou_total\n" +
+                "from ret_in_his\n" +
+                "where date(ret_in_date) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "and vou_total <>0\n" +
+                "order by ret_in_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("pur_inv_id"))
+                        .vouTotal(rs.getDouble("vou_total"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getReturnInList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<VoucherInfo> getReturnOutList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select ret_out_id,vou_total\n" +
+                "from ret_out_his\n" +
+                "where date(ret_out_date) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "and vou_total <>0\n" +
+                "order by ret_out_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("pur_inv_id"))
+                        .vouTotal(rs.getDouble("vou_total"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getReturnOutList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<VoucherInfo> getOPDList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select opd_inv_id,vou_total\n" +
+                "from opd_his\n" +
+                "where date(opd_date) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "and vou_total <>0\n" +
+                "order by opd_inv_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("opd_inv_id"))
+                        .vouTotal(rs.getDouble("vou_total"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getOPDList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<VoucherInfo> getOTList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select ot_inv_id,vou_total\n" +
+                "from ot_his\n" +
+                "where date(ot_date) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "and vou_total <>0\n" +
+                "order by ot_inv_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("ot_inv_id"))
+                        .vouTotal(rs.getDouble("vou_total"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getOTList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<VoucherInfo> getDCList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select dc_inv_id,vou_total\n" +
+                "from dc_his\n" +
+                "where date(dc_date) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "and vou_total <>0\n" +
+                "order by dc_inv_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("dc_inv_id"))
+                        .vouTotal(rs.getDouble("vou_total"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getDCList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<VoucherInfo> getPaymentList(String fromDate, String toDate) {
+        List<VoucherInfo> list = new ArrayList<>();
+        String sql = "select payment_id,paid_amtc\n" +
+                "from payment_his\n" +
+                "where date(pay_dt) between '" + fromDate + "' and '" + toDate + "'\n" +
+                "and deleted = false\n" +
+                "order by payment_id;";
+        ResultSet rs = getResult(sql);
+        try {
+            while (rs.next()) {
+                VoucherInfo info = VoucherInfo.builder()
+                        .vouNo(rs.getString("payment_id"))
+                        .vouTotal(rs.getDouble("paid_amtc"))
+                        .build();
+                list.add(info);
+            }
+
+        } catch (Exception e) {
+            log.error("getDCList : " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public List<ErrorMessage> getErrorMessage() {
+        return null;
+    }
+    private List<ErrorMessage> getDiscountError(){
+        String sql="";
+        return  new ArrayList<>();
     }
 
 

@@ -17,6 +17,9 @@ public class Patient implements java.io.Serializable {
     private String patientNo;
     @Column(name = "patient_name")
     private String patientName;
+    @ManyToOne
+    @JoinColumn(name = "pt_type")
+    private TraderGroup group;
 
     public Patient() {
     }

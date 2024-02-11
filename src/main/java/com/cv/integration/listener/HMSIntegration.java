@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -124,6 +123,8 @@ public class HMSIntegration {
     private String outPatientCode;
     @Value("${app.type}")
     private String appType;
+    @Value("${sync.date}")
+    private String syncDate;
     private final String ACK = "ACK";
     private final String APP_NAME = "CM";
     private final Integer MAC_ID = 99;
@@ -136,7 +137,10 @@ public class HMSIntegration {
 
     private void sendAccount(List<Gl> glList) {
         if (!glList.isEmpty()) {
-            Response response = accountApi.post().uri("/account/save-gl-list").body(Mono.just(glList), List.class).retrieve().bodyToMono(Response.class)
+            Response response = accountApi.post().uri("/account/saveGlList")
+                    .body(Mono.just(glList), List.class)
+                    .retrieve()
+                    .bodyToMono(Response.class)
                     //.retryWhen(Retry.backoff(3, Duration.ofSeconds(10))
                     //.maxBackoff(Duration.ofMinutes(1))) // Retry 3 times with a backoff of 10 seconds
                     //.timeout(Duration.ofSeconds(1)) // Timeout after 5 minutes
@@ -153,14 +157,12 @@ public class HMSIntegration {
                 String tranSource = response.getTranSource();
                 update(tranSource, code, ACK);
             }
-
         }
     }
 
 
     private void update(String tranSource, String code, String status) {
         switch (tranSource) {
-            case "TRADER" -> updateTrader(code, status);
             case "SALE" -> updateSale(code, status);
             case "PURCHASE" -> updatePurchase(code, status);
             case "RETURN_IN" -> updateReturnIn(code, status);
@@ -168,7 +170,7 @@ public class HMSIntegration {
             case "OPD" -> updateOPD(code, status);
             case "OT" -> updateOT(code, status);
             case "DC" -> updateDC(code, status);
-            case "OPD_RECEIVE" -> updateOPDReceive(Integer.parseInt(code), status);
+            case "BILL_PAYMENT" -> updateOPDReceive(Integer.parseInt(code), status);
             case "EXPENSE", "UNPAID" -> updateExpense(Integer.parseInt(code), status);
             case "PAYMENT" -> updatePayment(Integer.parseInt(code), status);
             case "OPENING" -> updateOpening(code, status);
@@ -178,32 +180,40 @@ public class HMSIntegration {
         }
     }
 
-    public String saveCOA(ChartOfAccount coa) {
-        Mono<String> result = accountApi.post().uri("/account/process-coa").body(Mono.just(coa), ChartOfAccount.class).retrieve().bodyToMono(String.class);
-        return result.block(Duration.ofMinutes(1));
+    public Mono<String> saveCOA(ChartOfAccount coa) {
+        return accountApi.post().uri("/account/processCOA")
+                .body(Mono.just(coa), ChartOfAccount.class)
+                .retrieve()
+                .bodyToMono(String.class);
     }
 
     public void saveOpening(COAOpening op) {
-        op = accountApi.post().uri("/account/save-opening").body(Mono.just(op), COAOpening.class).retrieve().bodyToMono(COAOpening.class).block();
+        op = accountApi.post().uri("/account/saveOpening").body(Mono.just(op), COAOpening.class).retrieve().bodyToMono(COAOpening.class).block();
         assert op != null;
         updateOpening(op.getTraderCode(), ACK);
     }
 
 
-    private void deleteGl(String tranSource, String vouNo, String srcAcc) {
-        Gl gl = new Gl();
-        GlKey key = new GlKey();
-        key.setCompCode(compCode);
-        gl.setKey(key);
-        gl.setTranSource(tranSource);
-        gl.setRefNo(vouNo);
-        gl.setSrcAccCode(srcAcc);
-        if (srcAcc != null) {
-            accountApi.post().uri("/account/delete-gl-by-account").body(Mono.just(gl), Gl.class).retrieve().bodyToMono(String.class).subscribe((t) -> {
-            }, (e) -> log.info(e.getMessage()));
-        } else {
-            accountApi.post().uri("/account/delete-gl-by-voucher").body(Mono.just(gl), Gl.class).retrieve().bodyToMono(String.class).subscribe((t) -> {
-            }, (e) -> log.info(e.getMessage()));
+    private void deleteGl(String tranSource, String vouNo,
+                          String srcAcc, Integer chargeType) {
+        if (chargeType == 2) {// mean FOC
+            Gl gl = new Gl();
+            GlKey key = new GlKey();
+            key.setCompCode(compCode);
+            gl.setKey(key);
+            gl.setTranSource(tranSource);
+            gl.setRefNo(vouNo);
+            gl.setSrcAccCode(srcAcc);
+            if (srcAcc != null) {
+                accountApi.post().uri("/account/deleteGlByAccount")
+                        .body(Mono.just(gl), Gl.class).retrieve()
+                        .bodyToMono(String.class).subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
+            } else {
+                accountApi.post().uri("/account/deleteGlByVoucher")
+                        .body(Mono.just(gl), Gl.class)
+                        .retrieve().bodyToMono(String.class)
+                        .subscribe((t) -> update(tranSource, vouNo, ACK), (e) -> log.info(e.getMessage()));
+            }
         }
 
     }
@@ -211,6 +221,7 @@ public class HMSIntegration {
 
     private void updateOPDCOA(String code, String status) {
         if (code != null) {
+            code = code.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
@@ -222,6 +233,7 @@ public class HMSIntegration {
 
     private void updateOTCOA(String code, String status) {
         if (code != null) {
+            code = code.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
@@ -233,13 +245,13 @@ public class HMSIntegration {
 
     private void updateDCCOA(String code, String status) {
         if (code != null) {
+            code = code.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
             String[] split = code.split(",");
             Integer groupId = Util1.getInteger(split[0]);
             String coaCode = split[1];
             dcGroupRepo.updateDCGroup(groupId, status, coaCode);
             log.info(String.format("updateDCCOA: %s", code));
         }
-
     }
 
     private void updateOpening(String code, String status) {
@@ -300,10 +312,10 @@ public class HMSIntegration {
                 accTrader.setTraderType(traderType);
                 accTrader.setAccount(traderType.equals("C") ? getCustomerAcc() : getSupplierAcc());
                 try {
-                    Mono<AccTrader> result = accountApi.post().uri("/account/save-trader").body(Mono.just(accTrader), AccTrader.class).retrieve().bodyToMono(AccTrader.class).doOnError((e) -> log.error(e.getMessage()));
+                    Mono<AccTrader> result = accountApi.post().uri("/account/saveTrader").body(Mono.just(accTrader), AccTrader.class).retrieve().bodyToMono(AccTrader.class).doOnError((e) -> log.error(e.getMessage()));
                     AccTrader trader = result.block();
                     assert trader != null;
-                    updateTrader(t.getTraderCode(), ACK);
+                    updateTrader(trader);
                 } catch (Exception e) {
                     log.error("sendTrader : " + e.getMessage());
                 }
@@ -321,57 +333,198 @@ public class HMSIntegration {
     }
 
 
-    private void updateTrader(String traderCode, String status) {
-        traderRepo.updateTrader(traderCode, status);
-        log.info(String.format("updateTrader: %s", traderCode));
+    private void updateTrader(AccTrader accTrader) {
+        String traderCode = accTrader.getKey().getCode();
+        Optional<Trader> optionalTrader = traderRepo.findById(traderCode);
+        if (optionalTrader.isPresent()) {
+            Trader t = optionalTrader.get();
+            t.setIntgUpdStatus("ACK");
+            t.setAccount(accTrader.getAccount());
+            traderRepo.save(t);
+            log.info(String.format("updateTrader: %s", traderCode));
+        } else {
+            log.error(String.format("Trader with code %s not found in the repository.", traderCode));
+        }
     }
 
 
     public void sendSaleVoucherToAccount(SaleHis sh) {
-        if (Util1.getBoolean(uploadSale)) {
-            String tranSource = "SALE";
-            AccountSetting setting = hmAccSetting.get(tranSource);
-            if (setting != null) {
-                Integer vouStatusId = sh.getVouStatusId();
-                String vouNo = sh.getVouNo();
-                if (vouStatusId == 1) {
+        if (Util1.compareDate(sh.getVouDate(), syncDate)) {
+            if (Util1.getBoolean(uploadSale)) {
+                String tranSource = "SALE";
+                AccountSetting setting = hmAccSetting.get(tranSource);
+                if (setting != null) {
+                    Integer vouStatusId = sh.getVouStatusId();
+                    String vouNo = sh.getVouNo();
+                    if (vouStatusId == 1) {
+                        String srcAcc = setting.getSourceAcc();
+                        String ipdSrc = setting.getIpdSource();
+                        String payAcc = setting.getPayAcc();
+                        String disAcc = setting.getDiscountAcc();
+                        String balAcc = setting.getBalanceAcc();
+                        String deptCode = setting.getDeptCode();
+                        LocalDateTime vouDate = sh.getVouDate();
+                        String traderCode = null;
+                        String reference = null;
+                        String accCodeByLoc = sh.getLocation().getAccCode();
+                        String deptCodeByLoc = sh.getLocation().getDeptCode();
+                        String traderByLoc = sh.getLocation().getTraderCode();
+                        boolean admission = !Util1.isNullOrEmpty(sh.getAdmissionNo());
+                        srcAcc = admission ? Util1.isNull(ipdSrc, srcAcc) : srcAcc;
+                        srcAcc = Util1.isNull(accCodeByLoc, srcAcc);
+                        deptCode = Util1.isNull(deptCodeByLoc, deptCode);
+                        String patientType = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                        Patient p = sh.getPatient();
+                        Trader trader = sh.getTrader();
+                        if (!Objects.isNull(p)) {
+                            String patientNo = p.getPatientNo();
+                            String patientName = p.getPatientName();
+                            traderCode = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? outPatientCode : inPatientCode;
+                            reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                            TraderGroup g = p.getGroup();
+                            if (g != null) {
+                                traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                                balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                            }
+                        } else if (trader != null) {
+                            traderCode = trader.getTraderCode();
+                            balAcc = Util1.isNull(trader.getAccount(), balAcc);
+                        } else if (appType.equals("H")) {
+                            if (Util1.isNullOrEmpty(traderByLoc)) {
+                                reference = String.format("%s : %s : (%s)", "-", Util1.isNull(sh.getName(), "-"), patientType);
+                                traderCode = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? outPatientCode : inPatientCode;
+                            }
+                        }
+                        String curCode = sh.getCurrency().getAccCurCode();
+                        boolean deleted = sh.isDeleted();
+                        double vouTotalAmt = Util1.getDouble(sh.getVouTotal());
+                        double vouPaidAmt = Util1.getDouble(sh.getVouPaid());
+                        double vouDisAmt = Util1.getDouble(sh.getVouDiscount());
+                        double vouBalAmt = Util1.getDouble(sh.getVouBalance());
+                        List<Gl> listGl = new ArrayList<>();
+                        //income
+                        if (vouBalAmt > 0) {
+                            Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
+                            gl.setGlDate(vouDate);
+                            gl.setDescription("Sale Voucher Total");
+                            gl.setSrcAccCode(srcAcc);
+                            gl.setDeptCode(deptCode);
+                            gl.setAccCode(balAcc);
+                            gl.setTraderCode(traderCode);
+                            gl.setCrAmt(vouTotalAmt);
+                            gl.setCurCode(curCode);
+                            gl.setReference(reference);
+                            gl.setCreatedDate(LocalDateTime.now());
+                            gl.setCreatedBy(APP_NAME);
+                            gl.setTranSource(tranSource);
+                            gl.setRefNo(vouNo);
+                            gl.setDeleted(deleted);
+                            gl.setMacId(MAC_ID);
+                            listGl.add(gl);
+                        }
+                        //discount
+                        if (vouDisAmt > 0) {
+                            Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
+                            if (vouPaidAmt > 0) {
+                                gl.setSrcAccCode(payAcc);
+                                gl.setCash(true);
+                            } else {
+                                gl.setSrcAccCode(balAcc);
+                                gl.setTraderCode(traderCode);
+                            }
+                            gl.setGlDate(vouDate);
+                            gl.setDescription("Sale Voucher Discount");
+                            gl.setAccCode(disAcc);
+                            gl.setCrAmt(vouDisAmt);
+                            gl.setCurCode(curCode);
+                            gl.setReference(reference);
+                            gl.setDeptCode(deptCode);
+                            gl.setCreatedDate(LocalDateTime.now());
+                            gl.setCreatedBy(APP_NAME);
+                            gl.setTranSource(tranSource);
+                            gl.setRefNo(vouNo);
+                            gl.setDeleted(deleted);
+                            gl.setMacId(MAC_ID);
+                            listGl.add(gl);
+                        }
+                        //payment
+                        if (vouPaidAmt > 0) {
+                            Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
+                            gl.setGlDate(vouDate);
+                            gl.setDescription("Sale Voucher Paid");
+                            gl.setSrcAccCode(payAcc);
+                            gl.setAccCode(srcAcc);
+                            gl.setDrAmt(vouTotalAmt);
+                            gl.setCurCode(curCode);
+                            gl.setReference(reference);
+                            gl.setDeptCode(deptCode);
+                            gl.setCreatedDate(LocalDateTime.now());
+                            gl.setCreatedBy(APP_NAME);
+                            gl.setTranSource(tranSource);
+                            gl.setRefNo(vouNo);
+                            gl.setDeleted(deleted);
+                            gl.setMacId(MAC_ID);
+                            gl.setCash(true);
+                            listGl.add(gl);
+                        }
+
+                        if (!listGl.isEmpty()) {
+                            sendAccount(listGl);
+                        } else {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            saleHisRepo.updateSale(vouNo, FOC);
+                            log.info("FOC");
+                        }
+                    }
+
+                } else {
+                    log.error(String.format("%s Setting not assigned", tranSource));
+                }
+            }
+        }
+    }
+
+    public void updateSale(String vouNo, String status) {
+        saleHisRepo.updateSale(vouNo, status);
+        log.info(String.format("updateSale :%s", vouNo));
+    }
+
+    public void sendPurchaseVoucherToAccount(PurHis ph) {
+        if (Util1.compareDate(ph.getVouDate(), syncDate)) {
+            if (Util1.getBoolean(uploadPurchase)) {
+                String tranSource = "PURCHASE";
+                AccountSetting setting = hmAccSetting.get(tranSource);
+                if (!Objects.isNull(setting)) {
+                    String vouNo = ph.getVouNo();
                     String srcAcc = setting.getSourceAcc();
-                    String ipdSrc = setting.getIpdSource();
                     String payAcc = setting.getPayAcc();
-                    String disAcc = setting.getDiscountAcc();
                     String balAcc = setting.getBalanceAcc();
                     String deptCode = setting.getDeptCode();
-                    LocalDateTime vouDate = sh.getVouDate();
-                    String traderCode = null;
-                    String reference = null;
-                    String accCodeByLoc = sh.getLocation().getAccCode();
-                    String deptCodeByLoc = sh.getLocation().getDeptCode();
-                    String traderByLoc = sh.getLocation().getTraderCode();
-                    boolean admission = !Util1.isNullOrEmpty(sh.getAdmissionNo());
-                    srcAcc = admission ? Util1.isNull(ipdSrc, srcAcc) : srcAcc;
-                    srcAcc = Util1.isNull(accCodeByLoc, srcAcc);
+                    LocalDateTime vouDate = ph.getVouDate();
+                    String curCode = ph.getCurrency().getAccCurCode();
+                    boolean deleted = ph.isDeleted();
+                    double vouPaidAmt = Util1.getDouble(ph.getVouPaid());
+                    double vouBalAmt = Util1.getDouble(ph.getVouBalance());
+                    Trader trader = ph.getTrader();
+                    String traderCode = trader.getTraderCode();
+                    balAcc = Util1.isNull(trader.getAccount(), balAcc);
+                    String reference = ph.getRemark();
+                    String deptCodeByLoc = ph.getLocation().getDeptCode();
+                    String accByLoc = ph.getLocation().getPurAccount();
                     deptCode = Util1.isNull(deptCodeByLoc, deptCode);
-                    String patientType = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    if (!Objects.isNull(sh.getPatient())) {
-                        String patientNo = sh.getPatient().getPatientNo();
-                        String patientName = sh.getPatient().getPatientName();
-                        traderCode = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                        reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
-                    } else if (appType.equals("H")) {
-                        if (Util1.isNullOrEmpty(traderByLoc)) {
-                            reference = String.format("%s : %s : (%s)", "-", Util1.isNull(sh.getName(), "-"), patientType);
-                            traderCode = Util1.isNullOrEmpty(sh.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                        }
-                    } else {
-                        Trader trader = sh.getTrader();
-                        traderCode = trader.getTraderCode();
-                    }
-                    String curCode = sh.getCurrency().getAccCurCode();
-                    boolean deleted = sh.isDeleted();
-                    double vouTotalAmt = Util1.getDouble(sh.getVouTotal());
-                    double vouPaidAmt = Util1.getDouble(sh.getVouPaid());
-                    double vouDisAmt = Util1.getDouble(sh.getVouDiscount());
-                    double vouBalAmt = Util1.getDouble(sh.getVouBalance());
+                    srcAcc = Util1.isNull(accByLoc, srcAcc);
                     List<Gl> listGl = new ArrayList<>();
                     //income
                     if (vouBalAmt > 0) {
@@ -381,40 +534,11 @@ public class HMSIntegration {
                         key.setCompCode(compCode);
                         gl.setKey(key);
                         gl.setGlDate(vouDate);
-                        gl.setDescription("Sale Voucher Total");
+                        gl.setDescription("Purchase Voucher Total");
                         gl.setSrcAccCode(srcAcc);
-                        gl.setDeptCode(deptCode);
                         gl.setAccCode(balAcc);
                         gl.setTraderCode(traderCode);
-                        gl.setCrAmt(vouTotalAmt);
-                        gl.setCurCode(curCode);
-                        gl.setReference(reference);
-                        gl.setCreatedDate(LocalDateTime.now());
-                        gl.setCreatedBy(APP_NAME);
-                        gl.setTranSource(tranSource);
-                        gl.setRefNo(vouNo);
-                        gl.setDeleted(deleted);
-                        gl.setMacId(MAC_ID);
-                        listGl.add(gl);
-                    }
-                    //discount
-                    if (vouDisAmt > 0) {
-                        Gl gl = new Gl();
-                        GlKey key = new GlKey();
-                        key.setDeptId(1);
-                        key.setCompCode(compCode);
-                        gl.setKey(key);
-                        if (vouPaidAmt > 0) {
-                            gl.setSrcAccCode(payAcc);
-                            gl.setCash(true);
-                        } else {
-                            gl.setSrcAccCode(balAcc);
-                            gl.setTraderCode(traderCode);
-                        }
-                        gl.setGlDate(vouDate);
-                        gl.setDescription("Sale Voucher Discount");
-                        gl.setAccCode(disAcc);
-                        gl.setCrAmt(vouDisAmt);
+                        gl.setDrAmt(vouBalAmt);
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
@@ -434,10 +558,123 @@ public class HMSIntegration {
                         key.setCompCode(compCode);
                         gl.setKey(key);
                         gl.setGlDate(vouDate);
-                        gl.setDescription("Sale Voucher Paid");
+                        gl.setDescription("Purchase Voucher Paid");
                         gl.setSrcAccCode(payAcc);
                         gl.setAccCode(srcAcc);
+                        gl.setCrAmt(vouPaidAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(trader.getTraderName());
+                        gl.setDeptCode(deptCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setDeleted(deleted);
+                        gl.setMacId(MAC_ID);
+                        gl.setCash(true);
+                        listGl.add(gl);
+                    }
+                    if (!listGl.isEmpty()) {
+                        sendAccount(listGl);
+                    } else {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        purHisRepo.updatePurchase(vouNo, ACK);
+                    }
+                } else {
+                    log.error(String.format("%s Setting not assigned", tranSource));
+                }
+            }
+        }
+    }
+
+    public void updatePurchase(String vouNo, String status) {
+        purHisRepo.updatePurchase(vouNo, status);
+        log.info(String.format("updatePurchase %s", vouNo));
+    }
+
+    public void sendReturnInVoucherToAccount(RetInHis ri) {
+        if (Util1.compareDate(ri.getVouDate(), syncDate)) {
+            if (Util1.getBoolean(uploadReturnIn)) {
+                String tranSource = "RETURN_IN";
+                AccountSetting setting = hmAccSetting.get(tranSource);
+                if (!Objects.isNull(setting)) {
+                    String vouNo = ri.getVouNo();
+                    String srcAcc = setting.getSourceAcc();
+                    String payAcc = setting.getPayAcc();
+                    String balAcc = setting.getBalanceAcc();
+                    String deptCode = setting.getDeptCode();
+                    LocalDateTime vouDate = ri.getVouDate();
+                    String traderCode = null;
+                    String reference = null;
+                    Patient p = ri.getPatient();
+                    Trader trader = ri.getTrader();
+                    if (!Objects.isNull(p)) {
+                        String patientNo = p.getPatientNo();
+                        String patientName = p.getPatientName();
+                        String patientType = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                        traderCode = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? outPatientCode : inPatientCode;
+                        reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                        TraderGroup g = p.getGroup();
+                        if (g != null) {
+                            traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                            balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                        }
+                    } else if (trader != null) {
+                        traderCode = trader.getTraderCode();
+                        balAcc = Util1.isNull(trader.getAccount(), balAcc);
+                    } else if (appType.equals("H")) {
+                        String patientType = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                        reference = String.format("%s : %s : (%s)", "-", "-", patientType);
+                        traderCode = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? outPatientCode : inPatientCode;
+                    }
+                    String curCode = ri.getCurrency().getAccCurCode();
+                    boolean deleted = ri.isDeleted();
+                    double vouTotalAmt = Util1.getDouble(ri.getVouTotal());
+                    double vouPaidAmt = Util1.getDouble(ri.getVouPaid());
+                    double vouBalAmt = Util1.getDouble(ri.getVouBalance());
+                    String deptCodeByLoc = ri.getLocation().getDeptCode();
+                    String accByLoc = ri.getLocation().getAccCode();
+                    String traderByLoc = ri.getLocation().getTraderCode();
+                    deptCode = Util1.isNull(deptCodeByLoc, deptCode);
+                    traderCode = Util1.isNull(traderByLoc, traderCode);
+                    srcAcc = Util1.isNull(accByLoc, srcAcc);
+                    List<Gl> listGl = new ArrayList<>();
+                    //income
+                    if (vouBalAmt > 0) {
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("Return In Voucher Total");
+                        gl.setSrcAccCode(srcAcc);
+                        gl.setAccCode(balAcc);
+                        gl.setTraderCode(traderCode);
                         gl.setDrAmt(vouTotalAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(reference);
+                        gl.setDeptCode(deptCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setDeleted(deleted);
+                        gl.setMacId(MAC_ID);
+                        listGl.add(gl);
+                    }
+                    //payment
+                    if (vouPaidAmt > 0) {
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("Return In Voucher Paid");
+                        gl.setSrcAccCode(payAcc);
+                        gl.setAccCode(srcAcc);
+                        gl.setCrAmt(vouPaidAmt);
                         gl.setCurCode(curCode);
                         gl.setReference(reference);
                         gl.setDeptCode(deptCode);
@@ -450,207 +687,11 @@ public class HMSIntegration {
                         gl.setCash(true);
                         listGl.add(gl);
                     }
+                    if (!listGl.isEmpty()) sendAccount(listGl);
 
-                    if (!listGl.isEmpty()) {
-                        sendAccount(listGl);
-                    } else {
-                        deleteGl(tranSource, vouNo, null);
-                        saleHisRepo.updateSale(vouNo, FOC);
-                        log.info("FOC");
-                    }
-                }
-
-            } else {
-                log.error(String.format("%s Setting not assigned", tranSource));
-            }
-        }
-    }
-
-    public void updateSale(String vouNo, String status) {
-        saleHisRepo.updateSale(vouNo, status);
-        log.info(String.format("updateSale :%s", vouNo));
-    }
-
-    public void sendPurchaseVoucherToAccount(PurHis ph) {
-        if (Util1.getBoolean(uploadPurchase)) {
-            String tranSource = "PURCHASE";
-            AccountSetting setting = hmAccSetting.get(tranSource);
-            if (!Objects.isNull(setting)) {
-                String vouNo = ph.getVouNo();
-                String srcAcc = setting.getSourceAcc();
-                String payAcc = setting.getPayAcc();
-                String balAcc = setting.getBalanceAcc();
-                String deptCode = setting.getDeptCode();
-                LocalDateTime vouDate = ph.getVouDate();
-                String curCode = ph.getCurrency().getAccCurCode();
-                boolean deleted = ph.isDeleted();
-                double vouPaidAmt = Util1.getDouble(ph.getVouPaid());
-                double vouBalAmt = Util1.getDouble(ph.getVouBalance());
-                Trader trader = ph.getTrader();
-                String traderCode = trader.getTraderCode();
-                String reference = ph.getRemark();
-                String deptCodeByLoc = ph.getLocation().getDeptCode();
-                String accByLoc = ph.getLocation().getPurAccount();
-                deptCode = Util1.isNull(deptCodeByLoc, deptCode);
-                srcAcc = Util1.isNull(accByLoc, srcAcc);
-                List<Gl> listGl = new ArrayList<>();
-                //income
-                if (vouBalAmt > 0) {
-                    Gl gl = new Gl();
-                    GlKey key = new GlKey();
-                    key.setDeptId(1);
-                    key.setCompCode(compCode);
-                    gl.setKey(key);
-                    gl.setGlDate(vouDate);
-                    gl.setDescription("Purchase Voucher Total");
-                    gl.setSrcAccCode(srcAcc);
-                    gl.setAccCode(balAcc);
-                    gl.setTraderCode(traderCode);
-                    gl.setDrAmt(vouBalAmt);
-                    gl.setCurCode(curCode);
-                    gl.setReference(reference);
-                    gl.setDeptCode(deptCode);
-                    gl.setCreatedDate(LocalDateTime.now());
-                    gl.setCreatedBy(APP_NAME);
-                    gl.setTranSource(tranSource);
-                    gl.setRefNo(vouNo);
-                    gl.setDeleted(deleted);
-                    gl.setMacId(MAC_ID);
-                    listGl.add(gl);
-                }
-                //payment
-                if (vouPaidAmt > 0) {
-                    Gl gl = new Gl();
-                    GlKey key = new GlKey();
-                    key.setDeptId(1);
-                    key.setCompCode(compCode);
-                    gl.setKey(key);
-                    gl.setGlDate(vouDate);
-                    gl.setDescription("Purchase Voucher Paid");
-                    gl.setSrcAccCode(payAcc);
-                    gl.setAccCode(srcAcc);
-                    gl.setCrAmt(vouPaidAmt);
-                    gl.setCurCode(curCode);
-                    gl.setReference(trader.getTraderName());
-                    gl.setDeptCode(deptCode);
-                    gl.setCreatedDate(LocalDateTime.now());
-                    gl.setCreatedBy(APP_NAME);
-                    gl.setTranSource(tranSource);
-                    gl.setRefNo(vouNo);
-                    gl.setDeleted(deleted);
-                    gl.setMacId(MAC_ID);
-                    gl.setCash(true);
-                    listGl.add(gl);
-                }
-                if (!listGl.isEmpty()) {
-                    sendAccount(listGl);
                 } else {
-                    deleteGl(tranSource, vouNo, null);
-                    purHisRepo.updatePurchase(vouNo, ACK);
+                    log.error(String.format("%s Setting not assigned", tranSource));
                 }
-            } else {
-                log.error(String.format("%s Setting not assigned", tranSource));
-            }
-        }
-    }
-
-    public void updatePurchase(String vouNo, String status) {
-        purHisRepo.updatePurchase(vouNo, status);
-        log.info(String.format("updatePurchase %s", vouNo));
-    }
-
-    public void sendReturnInVoucherToAccount(RetInHis ri) {
-        if (Util1.getBoolean(uploadReturnIn)) {
-            String tranSource = "RETURN_IN";
-            AccountSetting setting = hmAccSetting.get(tranSource);
-            if (!Objects.isNull(setting)) {
-                String vouNo = ri.getVouNo();
-                String srcAcc = setting.getSourceAcc();
-                String payAcc = setting.getPayAcc();
-                String balAcc = setting.getBalanceAcc();
-                String deptCode = setting.getDeptCode();
-                LocalDateTime vouDate = ri.getVouDate();
-                String traderCode;
-                String reference = null;
-                if (!Objects.isNull(ri.getPatient())) {
-                    String patientNo = ri.getPatient().getPatientNo();
-                    String patientName = ri.getPatient().getPatientName();
-                    String patientType = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    traderCode = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                    reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
-                } else if (appType.equals("H")) {
-                    String patientType = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    reference = String.format("%s : %s : (%s)", "-", "-", patientType);
-                    traderCode = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                } else {
-                    Trader trader = ri.getTrader();
-                    traderCode = trader.getTraderCode();
-
-                }
-                String curCode = ri.getCurrency().getAccCurCode();
-                boolean deleted = ri.isDeleted();
-                double vouTotalAmt = Util1.getDouble(ri.getVouTotal());
-                double vouPaidAmt = Util1.getDouble(ri.getVouPaid());
-                double vouBalAmt = Util1.getDouble(ri.getVouBalance());
-                String deptCodeByLoc = ri.getLocation().getDeptCode();
-                String accByLoc = ri.getLocation().getAccCode();
-                String traderByLoc = ri.getLocation().getTraderCode();
-                deptCode = Util1.isNull(deptCodeByLoc, deptCode);
-                traderCode = Util1.isNull(traderByLoc, traderCode);
-                srcAcc = Util1.isNull(accByLoc, srcAcc);
-                List<Gl> listGl = new ArrayList<>();
-                //income
-                if (vouBalAmt > 0) {
-                    Gl gl = new Gl();
-                    GlKey key = new GlKey();
-                    key.setDeptId(1);
-                    key.setCompCode(compCode);
-                    gl.setKey(key);
-                    gl.setGlDate(vouDate);
-                    gl.setDescription("Return In Voucher Total");
-                    gl.setSrcAccCode(srcAcc);
-                    gl.setAccCode(balAcc);
-                    gl.setTraderCode(traderCode);
-                    gl.setDrAmt(vouTotalAmt);
-                    gl.setCurCode(curCode);
-                    gl.setReference(reference);
-                    gl.setDeptCode(deptCode);
-                    gl.setCreatedDate(LocalDateTime.now());
-                    gl.setCreatedBy(APP_NAME);
-                    gl.setTranSource(tranSource);
-                    gl.setRefNo(vouNo);
-                    gl.setDeleted(deleted);
-                    gl.setMacId(MAC_ID);
-                    listGl.add(gl);
-                }
-                //payment
-                if (vouPaidAmt > 0) {
-                    Gl gl = new Gl();
-                    GlKey key = new GlKey();
-                    key.setDeptId(1);
-                    key.setCompCode(compCode);
-                    gl.setKey(key);
-                    gl.setGlDate(vouDate);
-                    gl.setDescription("Return In Voucher Paid");
-                    gl.setSrcAccCode(payAcc);
-                    gl.setAccCode(srcAcc);
-                    gl.setCrAmt(vouPaidAmt);
-                    gl.setCurCode(curCode);
-                    gl.setReference(reference);
-                    gl.setDeptCode(deptCode);
-                    gl.setCreatedDate(LocalDateTime.now());
-                    gl.setCreatedBy(APP_NAME);
-                    gl.setTranSource(tranSource);
-                    gl.setRefNo(vouNo);
-                    gl.setDeleted(deleted);
-                    gl.setMacId(MAC_ID);
-                    gl.setCash(true);
-                    listGl.add(gl);
-                }
-                if (!listGl.isEmpty()) sendAccount(listGl);
-
-            } else {
-                log.error(String.format("%s Setting not assigned", tranSource));
             }
         }
     }
@@ -661,82 +702,86 @@ public class HMSIntegration {
     }
 
     public void sendReturnOutVoucherToAccount(RetOutHis ro) {
-        if (Util1.getBoolean(uploadReturnOut)) {
-            String tranSource = "RETURN_OUT";
-            AccountSetting setting = hmAccSetting.get(tranSource);
-            if (!Objects.isNull(setting)) {
-                String vouNo = ro.getVouNo();
-                String srcAcc = setting.getSourceAcc();
-                String payAcc = setting.getPayAcc();
-                String balAcc = setting.getBalanceAcc();
-                String deptCode = setting.getDeptCode();
-                LocalDateTime vouDate = ro.getVouDate();
-                String curCode = ro.getCurrency().getAccCurCode();
-                boolean deleted = ro.isDeleted();
-                double vouTotalAmt = Util1.getDouble(ro.getVouTotal());
-                double vouPaidAmt = Util1.getDouble(ro.getVouPaid());
-                double vouBalAmt = Util1.getDouble(ro.getVouBalance());
-                Trader trader = ro.getTrader();
-                String traderCode = trader.getTraderCode();
-                String reference = ro.getRemark();
-                String deptCodeByLoc = ro.getLocation().getDeptCode();
-                String accByLoc = ro.getLocation().getAccCode();
-                deptCode = Util1.isNull(deptCodeByLoc, deptCode);
-                srcAcc = Util1.isNull(accByLoc, srcAcc);
-                List<Gl> listGl = new ArrayList<>();
-                //income
-                if (vouBalAmt > 0) {
-                    Gl gl = new Gl();
-                    GlKey key = new GlKey();
-                    key.setDeptId(1);
-                    key.setCompCode(compCode);
-                    gl.setKey(key);
-                    gl.setGlDate(vouDate);
-                    gl.setDescription("Return Out Voucher Total");
-                    gl.setSrcAccCode(srcAcc);
-                    gl.setAccCode(balAcc);
-                    gl.setTraderCode(traderCode);
-                    gl.setCrAmt(vouTotalAmt);
-                    gl.setCurCode(curCode);
-                    gl.setReference(reference);
-                    gl.setDeptCode(deptCode);
-                    gl.setCreatedDate(LocalDateTime.now());
-                    gl.setCreatedBy(APP_NAME);
-                    gl.setTranSource(tranSource);
-                    gl.setRefNo(vouNo);
-                    gl.setDeleted(deleted);
-                    gl.setMacId(MAC_ID);
-                    listGl.add(gl);
-                }
-                //payment
-                if (vouPaidAmt > 0) {
-                    Gl gl = new Gl();
-                    GlKey key = new GlKey();
-                    key.setDeptId(1);
-                    key.setCompCode(compCode);
-                    gl.setKey(key);
-                    gl.setGlDate(vouDate);
-                    gl.setDescription("Return Out Voucher Paid");
-                    gl.setSrcAccCode(payAcc);
-                    gl.setAccCode(srcAcc);
-                    gl.setDrAmt(vouPaidAmt);
-                    gl.setCurCode(curCode);
-                    gl.setReference(reference);
-                    gl.setDeptCode(deptCode);
-                    gl.setCreatedDate(LocalDateTime.now());
-                    gl.setCreatedBy(APP_NAME);
-                    gl.setTranSource(tranSource);
-                    gl.setRefNo(vouNo);
-                    gl.setDeleted(deleted);
-                    gl.setMacId(MAC_ID);
-                    gl.setCash(true);
-                    listGl.add(gl);
-                }
-                if (!listGl.isEmpty()) sendAccount(listGl);
+        if (Util1.compareDate(ro.getVouDate(), syncDate)) {
+            if (Util1.getBoolean(uploadReturnOut)) {
+                String tranSource = "RETURN_OUT";
+                AccountSetting setting = hmAccSetting.get(tranSource);
+                if (!Objects.isNull(setting)) {
+                    String vouNo = ro.getVouNo();
+                    String srcAcc = setting.getSourceAcc();
+                    String payAcc = setting.getPayAcc();
+                    String balAcc = setting.getBalanceAcc();
+                    String deptCode = setting.getDeptCode();
+                    LocalDateTime vouDate = ro.getVouDate();
+                    String curCode = ro.getCurrency().getAccCurCode();
+                    boolean deleted = ro.isDeleted();
+                    double vouTotalAmt = Util1.getDouble(ro.getVouTotal());
+                    double vouPaidAmt = Util1.getDouble(ro.getVouPaid());
+                    double vouBalAmt = Util1.getDouble(ro.getVouBalance());
+                    Trader trader = ro.getTrader();
+                    String traderCode = trader.getTraderCode();
+                    balAcc = Util1.isNull(trader.getAccount(), balAcc);
+                    String reference = ro.getRemark();
+                    String deptCodeByLoc = ro.getLocation().getDeptCode();
+                    String accByLoc = ro.getLocation().getAccCode();
+                    deptCode = Util1.isNull(deptCodeByLoc, deptCode);
+                    srcAcc = Util1.isNull(accByLoc, srcAcc);
+                    List<Gl> listGl = new ArrayList<>();
+                    //income
+                    if (vouBalAmt > 0) {
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("Return Out Voucher Total");
+                        gl.setSrcAccCode(srcAcc);
+                        gl.setAccCode(balAcc);
+                        gl.setTraderCode(traderCode);
+                        gl.setCrAmt(vouTotalAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(reference);
+                        gl.setDeptCode(deptCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setDeleted(deleted);
+                        gl.setMacId(MAC_ID);
+                        listGl.add(gl);
+                    }
+                    //payment
+                    if (vouPaidAmt > 0) {
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("Return Out Voucher Paid");
+                        gl.setSrcAccCode(payAcc);
+                        gl.setAccCode(srcAcc);
+                        gl.setDrAmt(vouPaidAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(reference);
+                        gl.setDeptCode(deptCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setDeleted(deleted);
+                        gl.setMacId(MAC_ID);
+                        gl.setCash(true);
+                        listGl.add(gl);
+                    }
+                    if (!listGl.isEmpty()) sendAccount(listGl);
 
-            } else {
-                log.error(String.format("%s Setting not assigned", tranSource));
+                } else {
+                    log.error(String.format("%s Setting not assigned", tranSource));
+                }
             }
+
         }
     }
 
@@ -746,381 +791,423 @@ public class HMSIntegration {
     }
 
     public void sendOPDVoucherToAccount(OPDHis oh) {
-        if (Util1.getBoolean(uploadOPD)) {
-            String tranSource = "OPD";
-            AccountSetting setting = hmAccSetting.get(tranSource);
-            if (!Objects.isNull(setting)) {
-                String vouNo = oh.getVouNo();
-                String srcAcc = setting.getSourceAcc();
-                String payAcc = setting.getPayAcc();
-                String disAcc = setting.getDiscountAcc();
-                String balAcc = setting.getBalanceAcc();
-                String mainDept = setting.getDeptCode();
-                LocalDateTime vouDate = oh.getVouDate();
-                String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                String reference;
-                String patientNo =null;
-                String doctorId = oh.getDoctorId();
-                if (!Objects.isNull(oh.getPatient())) {
-                    patientNo = oh.getPatient().getPatientNo();
-                    String patientName = oh.getPatient().getPatientName();
-                    reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
-                } else {
-                    reference = String.format("%s : %s : (%s)", "-", Util1.isNull(oh.getPatientName(), "-"), patientType);
-                }
-                String curCode = oh.getCurrency().getAccCurCode();
-                boolean deleted = oh.isDeleted();
-                double vouDisAmt = Util1.getDouble(oh.getVouDiscount());
-                double vouBalAmt = Util1.getDouble(oh.getVouBalance());
-                boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
-                Integer paymentId = oh.getPaymentId();
-                List<Gl> listGl = new ArrayList<>();
-                List<OPDHisDetail> listOPD = opdHisDetailRepo.search(vouNo);
-                if (!listOPD.isEmpty()) {
-                    for (OPDHisDetail op : listOPD) {
-                        OPDCategory cat = op.getService().getCategory();
-                        String serviceId = String.valueOf(op.getService().getServiceId());
-                        String serviceName = op.getService().getServiceName();
-                        if (op.getRefer() != null) {
-                            serviceName = String.format("%s : %s", serviceName, op.getRefer().getDoctorName());
+        if (Util1.compareDate(oh.getVouDate(), syncDate)) {
+            if (Util1.getBoolean(uploadOPD)) {
+                String tranSource = "OPD";
+                AccountSetting setting = hmAccSetting.get(tranSource);
+                if (!Objects.isNull(setting)) {
+                    String vouNo = oh.getVouNo();
+                    String srcAcc = setting.getSourceAcc();
+                    String payAcc = setting.getPayAcc();
+                    String disAcc = setting.getDiscountAcc();
+                    String balAcc = setting.getBalanceAcc();
+                    String mainDept = setting.getDeptCode();
+                    LocalDateTime vouDate = oh.getVouDate();
+                    String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
+                    String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                    String reference;
+                    String patientNo = null;
+                    String doctorId = oh.getDoctorId();
+                    Patient p = oh.getPatient();
+                    if (!Objects.isNull(p)) {
+                        patientNo = p.getPatientNo();
+                        String patientName = p.getPatientName();
+                        reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                        TraderGroup g = p.getGroup();
+                        if (g != null) {
+                            traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                            balAcc = Util1.isNull(g.getAccountId(), balAcc);
                         }
-                        //account
-                        String opdAcc = cat.getOpdAcc();
-                        String ipdAcc = cat.getIpdAcc();
-                        String hDepCode = cat.getGroup().getDeptCode();
-                        String deptCode = Util1.isNull(cat.getDeptCode(), hDepCode);
-                        String moAcc = cat.getMoFeeAcc();
-                        String staffAcc = cat.getStaffFeeAcc();
-                        String techAcc = cat.getTechFeeAcc();
-                        String referAcc = cat.getReferFeeAcc();
-                        String readerAcc = cat.getReadFeeAcc();
-                        String payableAcc = cat.getPayableAcc();
-                        //percent
-                        boolean percent = op.getService().isPercent();
-                        //amount
-                        double qty = Util1.getDouble(op.getQty());
-                        double amount = Util1.getDouble(op.getAmount());
-                        //income
-                        String tmp = admission ? Util1.isNull(ipdAcc, opdAcc) : opdAcc;
-                        srcAcc = Util1.isNull(tmp, srcAcc);
-                        if (amount == 0) {
-                            op.setMoFeeAmt(amount);
-                            op.setStaffFeeAmt(amount);
-                            op.setTechFeeAmt(amount);
-                            op.setReferFeeAmt(amount);
-                            op.setReadFeeAmt(amount);
+                    } else {
+                        reference = String.format("%s : %s : (%s)", "-", Util1.isNull(oh.getPatientName(), "-"), patientType);
+                    }
+                    String curCode = oh.getCurrency().getAccCurCode();
+                    boolean deleted = oh.isDeleted();
+                    double vouDisAmt = Util1.getDouble(oh.getVouDiscount());
+                    double vouPaid = Util1.getDouble(oh.getVouPaid());
+                    double vouTotal = Util1.getDouble(oh.getVouTotal());
+                    boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
+                    Integer paymentId = oh.getPaymentId();
+                    List<Gl> listGl = new ArrayList<>();
+                    List<OPDHisDetail> listOPD = opdHisDetailRepo.search(vouNo);
+                    if (!listOPD.isEmpty()) {
+                        for (OPDHisDetail op : listOPD) {
+                            OPDCategory cat = op.getService().getCategory();
+                            Integer chargeType = op.getChargeType();
+                            String serviceId = String.valueOf(op.getService().getServiceId());
+                            String serviceName = op.getService().getServiceName();
+                            if (op.getRefer() != null) {
+                                serviceName = String.format("%s : %s", serviceName, op.getRefer().getDoctorName());
+                            }
+                            //account
+                            String opdAcc = cat.getOpdAcc();
+                            String ipdAcc = cat.getIpdAcc();
+                            String hDepCode = cat.getGroup().getDeptCode();
+                            String deptCode = Util1.isNull(cat.getDeptCode(), hDepCode);
+                            String moAcc = cat.getMoFeeAcc();
+                            String staffAcc = cat.getStaffFeeAcc();
+                            String techAcc = cat.getTechFeeAcc();
+                            String referAcc = cat.getReferFeeAcc();
+                            String readerAcc = cat.getReadFeeAcc();
+                            String payableAcc = cat.getPayableAcc();
+                            //percent
+                            boolean percent = op.getService().isPercent();
+                            //amount
+                            double qty = Util1.getDouble(op.getQty());
+                            double amount = Util1.getDouble(op.getAmount());
+                            //income
+                            String tmp = admission ? Util1.isNull(ipdAcc, opdAcc) : opdAcc;
+                            srcAcc = Util1.isNull(tmp, srcAcc);
+                            if (amount == 0) {
+                                op.setMoFeeAmt(amount);
+                                op.setStaffFeeAmt(amount);
+                                op.setTechFeeAmt(amount);
+                                op.setReferFeeAmt(amount);
+                                op.setReadFeeAmt(amount);
+                            }
+                            if (amount != 0) {
+                                Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
+                                gl.setDescription(serviceName);
+                                //cash
+                                gl.setAccCode(srcAcc);
+                                if (amount > 0) {
+                                    gl.setDrAmt(amount);
+                                } else {
+                                    gl.setDescription("Return : " + serviceName);
+                                    gl.setCrAmt(amount * -1);
+                                }
+                                if (paymentId == 1 && vouTotal == vouPaid) {
+                                    gl.setSrcAccCode(payAcc);
+                                    gl.setCash(true);
+                                } else {
+                                    //credit
+                                    gl.setTraderCode(traderCode);
+                                    gl.setSrcAccCode(balAcc);
+                                }
+                                gl.setGlDate(vouDate);
+                                gl.setRefNo(vouNo);
+                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                gl.setMacId(MAC_ID);
+                                gl.setCreatedBy(APP_NAME);
+                                gl.setCurCode(curCode);
+                                gl.setRefNo(vouNo);
+                                gl.setCreatedDate(LocalDateTime.now());
+                                gl.setTranSource(tranSource);
+                                gl.setReference(reference);
+                                gl.setDeleted(deleted);
+                                gl.setServiceId(serviceId);
+                                gl.setDoctorId(doctorId);
+                                gl.setPatientNo(patientNo);
+                                listGl.add(gl);
+                                //payable
+                                if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
+                                    String[] accounts = payableAcc.split(",");
+                                    gl = new Gl();
+                                    key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(accounts[0]);
+                                    gl.setAccCode(accounts[1]);
+                                    gl.setCrAmt(amount);
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setDescription(serviceName);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(serviceId);
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                }
+                            } else {
+                                deleteGl(tranSource, vouNo, srcAcc, chargeType);
+                            }
+                            //mo payable
+                            if (!Util1.isNullOrEmpty(moAcc)) {
+                                double moFeeAmt = percent ? amount * Util1.getDouble(op.getMoFeeAmt()) / 100 : Util1.getDouble(op.getMoFeeAmt()) * qty;
+                                String[] accounts = moAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (moFeeAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (moFeeAmt > 0) {
+                                        gl.setCrAmt(moFeeAmt);
+                                    } else {
+                                        gl.setDrAmt(moFeeAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(serviceId);
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
+                            //staff payable
+                            if (!Util1.isNullOrEmpty(staffAcc)) {
+                                double staffAmt = percent ? Util1.getDouble(op.getStaffFeeAmt()) / 100 : Util1.getDouble(op.getStaffFeeAmt()) * qty;
+                                String[] accounts = staffAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (staffAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (staffAmt > 0) {
+                                        gl.setCrAmt(staffAmt);
+                                    } else {
+                                        gl.setDrAmt(staffAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(serviceId);
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
+                            //tech payable
+                            if (!Util1.isNullOrEmpty(techAcc)) {
+                                double techAmt = percent ? amount * Util1.getDouble(op.getTechFeeAmt()) / 100 : Util1.getDouble(op.getTechFeeAmt()) * qty;
+                                String[] accounts = techAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (techAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (techAmt > 0) {
+                                        gl.setCrAmt(techAmt);
+                                    } else {
+                                        gl.setDrAmt(techAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(serviceId);
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
+                            //refer payable
+                            if (!Util1.isNullOrEmpty(referAcc)) {
+                                double referAmt = percent ? amount * Util1.getDouble(op.getReferFeeAmt()) / 100 : Util1.getDouble(op.getReferFeeAmt()) * qty;
+                                String[] accounts = referAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (referAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setDescription(serviceName);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    if (referAmt > 0) {
+                                        gl.setCrAmt(referAmt);
+                                    } else {
+                                        gl.setDescription("Return : " + serviceName);
+                                        gl.setDrAmt(referAmt * -1);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(serviceId);
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
+                            //reader payable
+                            if (!Util1.isNullOrEmpty(readerAcc)) {
+                                double readerAmt = percent ? amount * Util1.getDouble(op.getReadFeeAmt()) / 100 : Util1.getDouble(op.getReadFeeAmt()) * qty;
+                                String[] accounts = readerAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (readerAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (readerAmt > 0) {
+                                        gl.setCrAmt(readerAmt);
+                                    } else {
+                                        gl.setDescription("Return : " + serviceName);
+                                        gl.setDrAmt(readerAmt * -1);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(serviceId);
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
                         }
-                        if (amount != 0) {
+                        //discount
+                        if (vouDisAmt > 0) {
                             Gl gl = new Gl();
                             GlKey key = new GlKey();
                             key.setDeptId(1);
                             key.setCompCode(compCode);
                             gl.setKey(key);
-                            //cash
-                            gl.setAccCode(srcAcc);
-                            if (amount > 0) {
-                                gl.setDrAmt(amount);
-                            } else {
-                                gl.setCrAmt(amount * -1);
-                            }
-                            if (paymentId == 1) {
+                            if (paymentId == 1 && vouTotal == vouPaid) {
                                 gl.setSrcAccCode(payAcc);
+                                gl.setAccCode(disAcc);
                                 gl.setCash(true);
                             } else {
-                                //credit
-                                gl.setTraderCode(traderCode);
                                 gl.setSrcAccCode(balAcc);
+                                gl.setAccCode(disAcc);
+                                gl.setTraderCode(traderCode);
                             }
                             gl.setGlDate(vouDate);
-                            gl.setRefNo(vouNo);
-                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                            gl.setMacId(MAC_ID);
-                            gl.setCreatedBy(APP_NAME);
+                            gl.setDescription("OPD Voucher Discount");
+                            gl.setCrAmt(vouDisAmt);
                             gl.setCurCode(curCode);
-                            gl.setRefNo(vouNo);
-                            gl.setDescription(serviceName);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setTranSource(tranSource);
                             gl.setReference(reference);
+                            gl.setDeptCode(mainDept);
+                            gl.setCreatedDate(LocalDateTime.now());
+                            gl.setCreatedBy(APP_NAME);
+                            gl.setTranSource(tranSource);
+                            gl.setRefNo(vouNo);
                             gl.setDeleted(deleted);
-                            gl.setServiceId(serviceId);
+                            gl.setMacId(MAC_ID);
                             gl.setDoctorId(doctorId);
                             gl.setPatientNo(patientNo);
                             listGl.add(gl);
-                            //payable
-                            if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
-                                String[] accounts = payableAcc.split(",");
-                                gl = new Gl();
-                                key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(accounts[0]);
-                                gl.setAccCode(accounts[1]);
-                                gl.setCrAmt(amount);
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(serviceId);
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            }
-                        } else {
-                            deleteGl(tranSource, vouNo, srcAcc);
                         }
-                        //mo payable
-                        if (!Util1.isNullOrEmpty(moAcc)) {
-                            double moFeeAmt = percent ? qty * amount * Util1.getDouble(op.getMoFeeAmt()) / 100 : Util1.getDouble(op.getMoFeeAmt()) * qty;
-                            String[] accounts = moAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (moFeeAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (moFeeAmt > 0) {
-                                    gl.setCrAmt(moFeeAmt);
-                                } else {
-                                    gl.setDrAmt(moFeeAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(serviceId);
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                        //staff payable
-                        if (!Util1.isNullOrEmpty(staffAcc)) {
-                            double staffAmt = percent ? qty * amount * Util1.getDouble(op.getStaffFeeAmt()) / 100 : Util1.getDouble(op.getStaffFeeAmt()) * qty;
-                            String[] accounts = staffAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (staffAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (staffAmt > 0) {
-                                    gl.setCrAmt(staffAmt);
-                                } else {
-                                    gl.setDrAmt(staffAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(serviceId);
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                        //tech payable
-                        if (!Util1.isNullOrEmpty(techAcc)) {
-                            double techAmt = percent ? qty * amount * Util1.getDouble(op.getTechFeeAmt()) / 100 : Util1.getDouble(op.getTechFeeAmt()) * qty;
-                            String[] accounts = techAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (techAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (techAmt > 0) {
-                                    gl.setCrAmt(techAmt);
-                                } else {
-                                    gl.setDrAmt(techAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(serviceId);
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                        //refer payable
-                        if (!Util1.isNullOrEmpty(referAcc)) {
-                            double referAmt = percent ? qty * amount * Util1.getDouble(op.getReferFeeAmt()) / 100 : Util1.getDouble(op.getReferFeeAmt()) * qty;
-                            String[] accounts = referAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (referAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (referAmt > 0) {
-                                    gl.setCrAmt(referAmt);
-                                } else {
-                                    gl.setDrAmt(referAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(serviceId);
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                        //refer payable
-                        if (!Util1.isNullOrEmpty(readerAcc)) {
-                            double readerAmt = percent ? qty * amount * Util1.getDouble(op.getReadFeeAmt()) / 100 : Util1.getDouble(op.getReadFeeAmt()) * qty;
-                            String[] accounts = readerAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (readerAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (readerAmt > 0) {
-                                    gl.setCrAmt(readerAmt);
-                                } else {
-                                    gl.setDrAmt(readerAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(serviceId);
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                    }
-                    //discount
-                    if (vouDisAmt > 0) {
-                        Gl gl = new Gl();
-                        GlKey key = new GlKey();
-                        key.setDeptId(1);
-                        key.setCompCode(compCode);
-                        gl.setKey(key);
-                        if (vouBalAmt > 0) {
-                            gl.setSrcAccCode(balAcc);
-                            gl.setAccCode(disAcc);
-                            gl.setTraderCode(traderCode);
-                        } else {
+                        //paid
+                        if (vouPaid != vouTotal) {
+                            Gl gl = new Gl();
+                            GlKey key = new GlKey();
+                            key.setDeptId(1);
+                            key.setCompCode(compCode);
+                            gl.setKey(key);
                             gl.setSrcAccCode(payAcc);
-                            gl.setAccCode(disAcc);
+                            gl.setAccCode(balAcc);
                             gl.setCash(true);
+                            gl.setGlDate(vouDate);
+                            gl.setDescription("OPD Partial Paid");
+                            gl.setDrAmt(vouPaid);
+                            gl.setCurCode(curCode);
+                            gl.setReference(reference);
+                            gl.setDeptCode(mainDept);
+                            gl.setCreatedDate(LocalDateTime.now());
+                            gl.setCreatedBy(APP_NAME);
+                            gl.setTranSource(tranSource);
+                            gl.setRefNo(vouNo);
+                            gl.setDeleted(deleted);
+                            gl.setMacId(MAC_ID);
+                            gl.setDoctorId(doctorId);
+                            gl.setPatientNo(patientNo);
+                            listGl.add(gl);
                         }
-                        gl.setGlDate(vouDate);
-                        gl.setDescription("OPD Voucher Discount");
-                        gl.setCrAmt(vouDisAmt);
-                        gl.setCurCode(curCode);
-                        gl.setReference(reference);
-                        gl.setDeptCode(mainDept);
-                        gl.setCreatedDate(LocalDateTime.now());
-                        gl.setCreatedBy(APP_NAME);
-                        gl.setTranSource(tranSource);
-                        gl.setRefNo(vouNo);
-                        gl.setDeleted(deleted);
-                        gl.setMacId(MAC_ID);
-                        gl.setDoctorId(doctorId);
-                        gl.setPatientNo(patientNo);
-                        listGl.add(gl);
-                    }
-                    if (!listGl.isEmpty()) {
-                        sendAccount(listGl);
+                        if (!listGl.isEmpty()) {
+                            sendAccount(listGl);
+                        } else {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            opdHisRepo.updateOPD(vouNo, FOC);
+                        }
                     } else {
-                        deleteGl(tranSource, vouNo, null);
-                        opdHisRepo.updateOPD(vouNo, FOC);
+                        deleteGl(tranSource, vouNo, null, 2);
+                        opdHisRepo.updateOPD(vouNo, ERR);
                     }
+
+
                 } else {
-                    deleteGl(tranSource, vouNo, null);
-                    opdHisRepo.updateOPD(vouNo, ERR);
+                    log.error(String.format("%s Setting not assigned", tranSource));
                 }
-
-
-            } else {
-                log.error(String.format("%s Setting not assigned", tranSource));
             }
         }
     }
@@ -1132,113 +1219,502 @@ public class HMSIntegration {
     }
 
     public void sendOTVoucherToAccount(OTHis oh) {
-        if (Util1.getBoolean(uploadOT)) {
-            String tranSource = "OT";
-            AccountSetting setting = hmAccSetting.get(tranSource);
-            if (!Objects.isNull(setting)) {
-                String vouNo = oh.getVouNo();
-                String srcAcc = setting.getSourceAcc();
-                String payAcc = setting.getPayAcc();
-                String disAcc = setting.getDiscountAcc();
-                String balAcc = setting.getBalanceAcc();
-                String mainDept = setting.getDeptCode();
-                LocalDateTime vouDate = oh.getVouDate();
-                String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                String reference;
-                String patientNo = null;
-                String doctorId = oh.getDoctorId();
-                if (!Objects.isNull(oh.getPatient())) {
-                    patientNo= oh.getPatient().getPatientNo();
-                    String patientName = oh.getPatient().getPatientName();
-                    String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
-                } else {
-                    String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    reference = String.format("%s : %s : (%s)", "-", "-", patientType);
-                }
-                String curCode = oh.getCurrency().getAccCurCode();
-                boolean deleted = oh.isDeleted();
-                boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
-                double paymentId = oh.getPaymentId();
-                List<OTHisDetail> listOT = otHisDetailRepo.search(vouNo);
-                List<Gl> listGl = new ArrayList<>();
+        if (Util1.compareDate(oh.getVouDate(), syncDate)) {
+            if (Util1.getBoolean(uploadOT)) {
+                String tranSource = "OT";
+                AccountSetting setting = hmAccSetting.get(tranSource);
+                if (!Objects.isNull(setting)) {
+                    String vouNo = oh.getVouNo();
+                    String srcAcc = setting.getSourceAcc();
+                    String payAcc = setting.getPayAcc();
+                    String disAcc = setting.getDiscountAcc();
+                    String balAcc = setting.getBalanceAcc();
+                    String mainDept = setting.getDeptCode();
+                    LocalDateTime vouDate = oh.getVouDate();
+                    String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
+                    String reference;
+                    String patientNo = null;
+                    String doctorId = oh.getDoctorId();
+                    Patient p = oh.getPatient();
+                    if (!Objects.isNull(p)) {
+                        patientNo = p.getPatientNo();
+                        String patientName = p.getPatientName();
+                        String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                        reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                        TraderGroup g = p.getGroup();
+                        if (g != null) {
+                            traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                            balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                        }
+                    } else {
+                        String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                        reference = String.format("%s : %s : (%s)", "-", "-", patientType);
+                    }
+                    String curCode = oh.getCurrency().getAccCurCode();
+                    boolean deleted = oh.isDeleted();
+                    boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
+                    double paymentId = oh.getPaymentId();
+                    List<OTHisDetail> listOT = otHisDetailRepo.search(vouNo);
+                    List<Gl> listGl = new ArrayList<>();
 
-                if (!listOT.isEmpty()) {
-                    for (OTHisDetail ot : listOT) {
-                        StringBuilder doctorName = new StringBuilder();
-                        List<OTDoctorFee> doctors = otDoctorFeeRepo.search(ot.getId());
-                        if (!doctors.isEmpty()) {
-                            for (OTDoctorFee d : doctors) {
-                                doctorName.append(" : ").append(d.getDoctor().getDoctorName());
+                    if (!listOT.isEmpty()) {
+                        for (OTHisDetail ot : listOT) {
+                            StringBuilder doctorName = new StringBuilder();
+                            List<OTDoctorFee> doctors = otDoctorFeeRepo.search(ot.getId());
+                            if (!doctors.isEmpty()) {
+                                for (OTDoctorFee d : doctors) {
+                                    doctorName.append(" : ").append(d.getDoctor().getDoctorName());
+                                }
                             }
-                        }
-                        OTGroup group = ot.getService().getOtGroup();
-                        Integer serviceId =ot.getService().getServiceId();
-                        String serviceName = ot.getService().getServiceName();
-                        if (!doctorName.isEmpty()) {
-                            serviceName = String.format("%s%s", serviceName, doctorName);
-                        }
-                        //account
-                        String opdAcc = group.getOpdAcc();
-                        String ipdAcc = group.getIpdAcc();
-                        String deptCode = group.getDeptCode();
-                        String moAcc = group.getMoFeeAcc();
-                        String staffAcc = group.getStaffFeeAcc();
-                        String nurseAcc = group.getNurseFeeAcc();
-                        String payableAcc = group.getPayableAcc();
-                        //amount
-                        double qty = Util1.getDouble(ot.getQty());
-                        double amount = Util1.getDouble(ot.getAmount());
-                        if (amount == 0) {
-                            ot.setStaffFeeAmt(amount);
-                            ot.setMoFeeAmt(amount);
-                            ot.setNurseFeeAmt(amount);
-                        }
-                        //discount
-                        if (serviceId == Util1.getInteger(otDiscountId)) {
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            //cash
-                            if (paymentId == 1) {
-                                gl.setSrcAccCode(payAcc);
-                                gl.setCash(true);
-                            } else {
+                            Integer chargeType = ot.getChargeType();
+                            OTGroup group = ot.getService().getOtGroup();
+                            Integer serviceId = ot.getService().getServiceId();
+                            String serviceName = ot.getService().getServiceName();
+                            if (!doctorName.isEmpty()) {
+                                serviceName = String.format("%s%s", serviceName, doctorName);
+                            }
+                            //account
+                            String opdAcc = group.getOpdAcc();
+                            String ipdAcc = group.getIpdAcc();
+                            String deptCode = group.getDeptCode();
+                            String moAcc = group.getMoFeeAcc();
+                            String staffAcc = group.getStaffFeeAcc();
+                            String nurseAcc = group.getNurseFeeAcc();
+                            String payableAcc = group.getPayableAcc();
+                            //amount
+                            double qty = Util1.getDouble(ot.getQty());
+                            double amount = Util1.getDouble(ot.getAmount());
+                            if (amount == 0) {
+                                ot.setStaffFeeAmt(amount);
+                                ot.setMoFeeAmt(amount);
+                                ot.setNurseFeeAmt(amount);
+                            }
+                            //discount
+                            if (serviceId == Util1.getInteger(otDiscountId)) {
+                                Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
+                                //cash
+                                if (paymentId == 1) {
+                                    gl.setSrcAccCode(payAcc);
+                                    gl.setCash(true);
+                                } else {
+                                    //credit
+                                    gl.setSrcAccCode(balAcc);
+                                    gl.setTraderCode(traderCode);
+                                }
+                                gl.setGlDate(vouDate);
+                                gl.setAccCode(Util1.isNull(opdAcc, disAcc));
+                                gl.setCrAmt(amount);
+                                gl.setRefNo(vouNo);
+                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                gl.setMacId(MAC_ID);
+                                gl.setCreatedBy(APP_NAME);
+                                gl.setCurCode(curCode);
+                                gl.setRefNo(vouNo);
+                                gl.setDescription(serviceName);
+                                gl.setCreatedDate(LocalDateTime.now());
+                                gl.setTranSource(tranSource);
+                                gl.setReference(reference);
+                                gl.setDeleted(deleted);
+                                gl.setServiceId(String.valueOf(serviceId));
+                                gl.setDoctorId(doctorId);
+                                gl.setPatientNo(patientNo);
+                                listGl.add(gl);
+                            } else if (serviceId == Util1.getInteger(otPaidId) || serviceId == Util1.getInteger(otDepositId)) {
+                                //paid or deposit
                                 //credit
-                                gl.setSrcAccCode(balAcc);
-                                gl.setTraderCode(traderCode);
-                            }
-                            gl.setGlDate(vouDate);
-                            gl.setAccCode(Util1.isNull(opdAcc, disAcc));
-                            gl.setCrAmt(amount);
-                            gl.setRefNo(vouNo);
-                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                            gl.setMacId(MAC_ID);
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setCurCode(curCode);
-                            gl.setRefNo(vouNo);
-                            gl.setDescription(serviceName);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setTranSource(tranSource);
-                            gl.setReference(reference);
-                            gl.setDeleted(deleted);
-                            gl.setServiceId(String.valueOf(serviceId));
-                            gl.setDoctorId(doctorId);
-                            gl.setPatientNo(patientNo);
-                            listGl.add(gl);
-                        } else if (serviceId == Util1.getInteger(otPaidId) || serviceId == Util1.getInteger(otDepositId)) {
-                            //paid or deposit
-                            //credit
-                            if (paymentId == 2) {
+                                if (paymentId == 2) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(Util1.isNull(opdAcc, payAcc));
+                                    gl.setAccCode(balAcc);
+                                    gl.setDrAmt(amount);
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setDescription(serviceName);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setTraderCode(traderCode);
+                                    gl.setDeleted(deleted);
+                                    gl.setCash(true);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                }
+                            } else if (serviceId == Util1.getInteger(otRefundId)) {
+                                //refund
                                 Gl gl = new Gl();
                                 GlKey key = new GlKey();
                                 key.setDeptId(1);
                                 key.setCompCode(compCode);
                                 gl.setKey(key);
                                 gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(Util1.isNull(opdAcc, payAcc));
+                                gl.setSrcAccCode(payAcc);
+                                if (!Util1.isNullOrEmpty(opdAcc)) {
+                                    gl.setAccCode(opdAcc);
+                                } else {
+                                    gl.setAccCode(balAcc);
+                                    gl.setTraderCode(traderCode);
+                                }
+                                gl.setCrAmt(amount);
+                                gl.setRefNo(vouNo);
+                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                gl.setMacId(MAC_ID);
+                                gl.setCreatedBy(APP_NAME);
+                                gl.setCurCode(curCode);
+                                gl.setRefNo(vouNo);
+                                gl.setDescription(serviceName);
+                                gl.setCreatedDate(LocalDateTime.now());
+                                gl.setTranSource(tranSource);
+                                gl.setReference(reference);
+                                gl.setTraderCode(traderCode);
+                                gl.setDeleted(deleted);
+                                gl.setCash(true);
+                                gl.setServiceId(String.valueOf(serviceId));
+                                gl.setDoctorId(doctorId);
+                                gl.setPatientNo(patientNo);
+                                listGl.add(gl);
+                            } else {
+                                //income
+                                String tmp = admission ? Util1.isNull(ipdAcc, opdAcc) : opdAcc;
+                                srcAcc = Util1.isNull(tmp, srcAcc);
+                                if (amount != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setAccCode(srcAcc);
+                                    if (paymentId == 1) {
+                                        gl.setSrcAccCode(payAcc);
+                                        gl.setCash(true);
+                                    } else {
+                                        //credit
+                                        gl.setTraderCode(traderCode);
+                                        gl.setSrcAccCode(balAcc);
+                                    }
+                                    if (amount > 0) {
+                                        gl.setDrAmt(amount);
+                                    } else {
+                                        gl.setCrAmt(amount * -1);
+                                    }
+                                    gl.setGlDate(vouDate);
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setDescription(serviceName);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                    //payable
+                                    if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
+                                        String[] accounts = payableAcc.split(",");
+                                        gl = new Gl();
+                                        key = new GlKey();
+                                        key.setDeptId(1);
+                                        key.setCompCode(compCode);
+                                        gl.setKey(key);
+                                        gl.setGlDate(vouDate);
+                                        gl.setSrcAccCode(accounts[0]);
+                                        gl.setAccCode(accounts[1]);
+                                        gl.setCrAmt(amount);
+                                        gl.setRefNo(vouNo);
+                                        gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                        gl.setMacId(MAC_ID);
+                                        gl.setCreatedBy(APP_NAME);
+                                        gl.setCurCode(curCode);
+                                        gl.setRefNo(vouNo);
+                                        gl.setDescription(serviceName);
+                                        gl.setCreatedDate(LocalDateTime.now());
+                                        gl.setTranSource(tranSource);
+                                        gl.setReference(reference);
+                                        gl.setDeleted(deleted);
+                                        gl.setServiceId(String.valueOf(serviceId));
+                                        gl.setDoctorId(doctorId);
+                                        gl.setPatientNo(patientNo);
+                                        listGl.add(gl);
+                                    }
+                                } else {
+                                    deleteGl(tranSource, vouNo, srcAcc, chargeType);
+                                }
+                            }
+                            //mo payable
+                            if (!Util1.isNullOrEmpty(moAcc)) {
+                                double moFeeAmt = Util1.getDouble(ot.getMoFeeAmt()) * qty;
+                                String[] accounts = moAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (moFeeAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (moFeeAmt > 0) {
+                                        gl.setCrAmt(moFeeAmt);
+                                    } else {
+                                        gl.setDrAmt(moFeeAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
+                            //staff payable
+                            if (!Util1.isNullOrEmpty(staffAcc)) {
+                                double staffAmt = Util1.getDouble(ot.getStaffFeeAmt()) * qty;
+                                String[] accounts = staffAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (staffAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (staffAmt > 0) {
+                                        gl.setCrAmt(staffAmt);
+                                    } else {
+                                        gl.setDrAmt(staffAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
+                            //nurse payable
+                            if (!Util1.isNullOrEmpty(nurseAcc)) {
+                                double nurseAmt = Util1.getDouble(ot.getNurseFeeAmt()) * qty;
+                                String[] accounts = nurseAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (nurseAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (nurseAmt > 0) {
+                                        gl.setCrAmt(nurseAmt);
+                                    } else {
+                                        gl.setDrAmt(nurseAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
+                            }
+                        }//loop
+                        if (!listGl.isEmpty()) {
+                            sendAccount(listGl);
+                        } else {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            otHisRepo.updateOT(vouNo, FOC);
+                        }
+                    } else {
+                        otHisRepo.updateOT(vouNo, ERR);
+                    }
+
+                } else {
+                    log.error(String.format("%s Setting not assigned", tranSource));
+                }
+            }
+        }
+    }
+
+
+    public void updateOT(String vouNo, String status) {
+        otHisRepo.updateOT(vouNo, status);
+        log.info(String.format("updateOT: %s", vouNo));
+    }
+
+    public void sendDCVoucherToAccount(DCHis oh) {
+        if (Util1.compareDate(oh.getVouDate(), syncDate)) {
+            if (Util1.getBoolean(uploadDC)) {
+                String tranSource = "DC";
+                AccountSetting setting = hmAccSetting.get(tranSource);
+                if (!Objects.isNull(setting)) {
+                    String vouNo = oh.getVouNo();
+                    String srcAcc = setting.getSourceAcc();
+                    String payAcc = setting.getPayAcc();
+                    String disAcc = setting.getDiscountAcc();
+                    String balAcc = setting.getBalanceAcc();
+                    String mainDept = setting.getDeptCode();
+                    LocalDateTime vouDate = oh.getVouDate();
+                    String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
+                    String reference;
+                    String patientNo = null;
+                    String doctorId = oh.getDoctorId();
+                    Patient p = oh.getPatient();
+                    if (!Objects.isNull(p)) {
+                        patientNo = p.getPatientNo();
+                        String patientName = p.getPatientName();
+                        String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                        reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
+                        TraderGroup g = p.getGroup();
+                        if (g != null) {
+                            traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                            balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                        }
+                    } else {
+                        String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
+                        reference = String.format("%s : %s : (%s)", "-", "-", patientType);
+                    }
+                    String curCode = oh.getCurrency().getAccCurCode();
+                    boolean deleted = oh.isDeleted();
+                    Integer paymentId = oh.getPaymentId();
+                    List<DCHisDetail> listDC = dcHisDetailRepo.search(vouNo);
+                    if (!listDC.isEmpty()) {
+                        List<Gl> listGl = new ArrayList<>();
+                        StringBuilder doctorName = new StringBuilder();
+                        for (DCHisDetail dc : listDC) {
+                            List<DCDoctorFee> doctors = dcDoctorFeeRepo.search(dc.getId());
+                            if (!doctors.isEmpty()) {
+                                for (DCDoctorFee d : doctors) {
+                                    doctorName.append(" : ").append(d.getDoctor().getDoctorName());
+                                }
+                            }
+                            Integer chargeType = dc.getChargeType();
+                            DCGroup group = dc.getService().getDcGroup();
+                            String serviceName = dc.getService().getServiceName();
+                            Integer serviceId = dc.getService().getServiceId();
+                            if (!doctorName.isEmpty()) {
+                                serviceName = String.format("%s%s", serviceName, doctorName);
+                            }
+                            //account
+                            String accountCode = group.getAccountCode();
+                            String deptCode = group.getDeptCode();
+                            String moAcc = group.getMoFeeAcc();
+                            String techAcc = group.getTechFeeAcc();
+                            String nurseAcc = group.getNurseFeeAcc();
+                            String payableAcc = group.getPayableAcc();
+                            //amount
+                            double qty = Util1.getDouble(dc.getQty());
+                            double amount = Util1.getDouble(dc.getAmount());
+                            if (amount == 0) {
+                                dc.setTechFeeAmt(amount);
+                                dc.setMoFeeAmt(amount);
+                                dc.setNurseFeeAmt(amount);
+                            }
+                            //discount
+                            if (serviceId == Util1.getInteger(dcDiscountId)) {
+                                Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
+                                //cash
+                                if (paymentId == 1) {
+                                    gl.setSrcAccCode(payAcc);
+                                    gl.setCash(true);
+                                } else {
+                                    //credit
+                                    gl.setSrcAccCode(balAcc);
+                                    gl.setTraderCode(traderCode);
+                                }
+                                gl.setGlDate(vouDate);
+                                gl.setAccCode(Util1.isNull(accountCode, disAcc));
+                                gl.setCrAmt(amount);
+                                gl.setRefNo(vouNo);
+                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                gl.setMacId(MAC_ID);
+                                gl.setCreatedBy(APP_NAME);
+                                gl.setCurCode(curCode);
+                                gl.setRefNo(vouNo);
+                                gl.setDescription(serviceName);
+                                gl.setCreatedDate(LocalDateTime.now());
+                                gl.setTranSource(tranSource);
+                                gl.setReference(reference);
+                                gl.setDeleted(deleted);
+                                gl.setServiceId(String.valueOf(serviceId));
+                                gl.setDoctorId(doctorId);
+                                gl.setPatientNo(patientNo);
+                                listGl.add(gl);
+                            } else if (serviceId == Util1.getInteger(dcPaidId) || serviceId == Util1.getInteger(dcDepositId)) {
+                                //paid or deposit
+                                //credit
+                                Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
+                                gl.setGlDate(vouDate);
+                                gl.setSrcAccCode(Util1.isNull(accountCode, payAcc));
                                 gl.setAccCode(balAcc);
                                 gl.setDrAmt(amount);
                                 gl.setRefNo(vouNo);
@@ -1258,464 +1734,23 @@ public class HMSIntegration {
                                 gl.setDoctorId(doctorId);
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
-                            }
-                        } else if (serviceId == Util1.getInteger(otRefundId)) {
-                            //refund
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            gl.setGlDate(vouDate);
-                            gl.setSrcAccCode(payAcc);
-                            if (!Util1.isNullOrEmpty(opdAcc)) {
-                                gl.setAccCode(opdAcc);
-                            } else {
-                                gl.setAccCode(balAcc);
-                                gl.setTraderCode(traderCode);
-                            }
-                            gl.setCrAmt(amount);
-                            gl.setRefNo(vouNo);
-                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                            gl.setMacId(MAC_ID);
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setCurCode(curCode);
-                            gl.setRefNo(vouNo);
-                            gl.setDescription(serviceName);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setTranSource(tranSource);
-                            gl.setReference(reference);
-                            gl.setTraderCode(traderCode);
-                            gl.setDeleted(deleted);
-                            gl.setCash(true);
-                            gl.setServiceId(String.valueOf(serviceId));
-                            gl.setDoctorId(doctorId);
-                            gl.setPatientNo(patientNo);
-                            listGl.add(gl);
-                        } else {
-                            //income
-                            String tmp = admission ? Util1.isNull(ipdAcc, opdAcc) : opdAcc;
-                            srcAcc = Util1.isNull(tmp, srcAcc);
-                            if (amount != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setAccCode(srcAcc);
-                                if (paymentId == 1) {
-                                    gl.setSrcAccCode(payAcc);
-                                    gl.setCash(true);
-                                } else {
-                                    //credit
-                                    gl.setTraderCode(traderCode);
-                                    gl.setSrcAccCode(balAcc);
-                                }
-                                if (amount > 0) {
-                                    gl.setDrAmt(amount);
-                                } else {
-                                    gl.setCrAmt(amount * -1);
-                                }
-                                gl.setGlDate(vouDate);
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(String.valueOf(serviceId));
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                                //payable
-                                if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
-                                    String[] accounts = payableAcc.split(",");
-                                    gl = new Gl();
-                                    key = new GlKey();
-                                    key.setDeptId(1);
-                                    key.setCompCode(compCode);
-                                    gl.setKey(key);
-                                    gl.setGlDate(vouDate);
-                                    gl.setSrcAccCode(accounts[0]);
-                                    gl.setAccCode(accounts[1]);
-                                    gl.setCrAmt(amount);
-                                    gl.setRefNo(vouNo);
-                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                    gl.setMacId(MAC_ID);
-                                    gl.setCreatedBy(APP_NAME);
-                                    gl.setCurCode(curCode);
-                                    gl.setRefNo(vouNo);
-                                    gl.setDescription(serviceName);
-                                    gl.setCreatedDate(LocalDateTime.now());
-                                    gl.setTranSource(tranSource);
-                                    gl.setReference(reference);
-                                    gl.setDeleted(deleted);
-                                    gl.setServiceId(String.valueOf(serviceId));
-                                    gl.setDoctorId(doctorId);
-                                    gl.setPatientNo(patientNo);
-                                    listGl.add(gl);
-                                }
-                            } else {
-                                deleteGl(tranSource, vouNo, srcAcc);
-                            }
-                        }
-                        //mo payable
-                        if (!Util1.isNullOrEmpty(moAcc)) {
-                            double moFeeAmt = Util1.getDouble(ot.getMoFeeAmt()) * qty;
-                            String[] accounts = moAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (moFeeAmt != 0) {
+
+                            } else if (serviceId == Util1.getInteger(dcRefundId)) {
+                                //refund
                                 Gl gl = new Gl();
                                 GlKey key = new GlKey();
                                 key.setDeptId(1);
                                 key.setCompCode(compCode);
                                 gl.setKey(key);
                                 gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (moFeeAmt > 0) {
-                                    gl.setCrAmt(moFeeAmt);
-                                } else {
-                                    gl.setDrAmt(moFeeAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(String.valueOf(serviceId));
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                        //staff payable
-                        if (!Util1.isNullOrEmpty(staffAcc)) {
-                            double staffAmt = Util1.getDouble(ot.getStaffFeeAmt()) * qty;
-                            String[] accounts = staffAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (staffAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (staffAmt > 0) {
-                                    gl.setCrAmt(staffAmt);
-                                } else {
-                                    gl.setDrAmt(staffAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(String.valueOf(serviceId));
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                        //nurse payable
-                        if (!Util1.isNullOrEmpty(nurseAcc)) {
-                            double nurseAmt = Util1.getDouble(ot.getNurseFeeAmt()) * qty;
-                            String[] accounts = nurseAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (nurseAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (nurseAmt > 0) {
-                                    gl.setCrAmt(nurseAmt);
-                                } else {
-                                    gl.setDrAmt(nurseAmt);
-                                }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(String.valueOf(serviceId));
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
-                            }
-                        }
-                    }//loop
-                    if (!listGl.isEmpty()) {
-                        sendAccount(listGl);
-                    } else {
-                        deleteGl(tranSource, vouNo, null);
-                        otHisRepo.updateOT(vouNo, FOC);
-                    }
-                } else {
-                    otHisRepo.updateOT(vouNo, ERR);
-                }
-
-            } else {
-                log.error(String.format("%s Setting not assigned", tranSource));
-            }
-        }
-    }
-
-
-    public void updateOT(String vouNo, String status) {
-        otHisRepo.updateOT(vouNo, status);
-        log.info(String.format("updateOT: %s", vouNo));
-    }
-
-    public void sendDCVoucherToAccount(DCHis oh) {
-        if (Util1.getBoolean(uploadDC)) {
-            String tranSource = "DC";
-            AccountSetting setting = hmAccSetting.get(tranSource);
-            if (!Objects.isNull(setting)) {
-                String vouNo = oh.getVouNo();
-                String srcAcc = setting.getSourceAcc();
-                String payAcc = setting.getPayAcc();
-                String disAcc = setting.getDiscountAcc();
-                String balAcc = setting.getBalanceAcc();
-                String mainDept = setting.getDeptCode();
-                LocalDateTime vouDate = oh.getVouDate();
-                String traderCode = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? outPatientCode : inPatientCode;
-                String reference;
-                String patientNo=null;
-                String doctorId = oh.getDoctorId();
-                if (!Objects.isNull(oh.getPatient())) {
-                    patientNo = oh.getPatient().getPatientNo();
-                    String patientName = oh.getPatient().getPatientName();
-                    String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    reference = String.format("%s : %s : (%s)", patientNo, patientName, patientType);
-                } else {
-                    String patientType = Util1.isNullOrEmpty(oh.getAdmissionNo()) ? "Outpatient" : "Inpatient";
-                    reference = String.format("%s : %s : (%s)", "-", "-", patientType);
-                }
-                String curCode = oh.getCurrency().getAccCurCode();
-                boolean deleted = oh.isDeleted();
-                Integer paymentId = oh.getPaymentId();
-                List<DCHisDetail> listDC = dcHisDetailRepo.search(vouNo);
-                if (!listDC.isEmpty()) {
-                    List<Gl> listGl = new ArrayList<>();
-                    StringBuilder doctorName = new StringBuilder();
-                    for (DCHisDetail dc : listDC) {
-                        List<DCDoctorFee> doctors = dcDoctorFeeRepo.search(dc.getId());
-                        if (!doctors.isEmpty()) {
-                            for (DCDoctorFee d : doctors) {
-                                doctorName.append(" : ").append(d.getDoctor().getDoctorName());
-                            }
-                        }
-                        DCGroup group = dc.getService().getDcGroup();
-                        String serviceName = dc.getService().getServiceName();
-                        Integer serviceId = dc.getService().getServiceId();
-                        if (!doctorName.isEmpty()) {
-                            serviceName = String.format("%s%s", serviceName, doctorName);
-                        }
-                        //account
-                        String accountCode = group.getAccountCode();
-                        String deptCode = group.getDeptCode();
-                        String moAcc = group.getMoFeeAcc();
-                        String techAcc = group.getTechFeeAcc();
-                        String nurseAcc = group.getNurseFeeAcc();
-                        String payableAcc = group.getPayableAcc();
-                        //amount
-                        double qty = Util1.getDouble(dc.getQty());
-                        double amount = Util1.getDouble(dc.getAmount());
-                        if (amount == 0) {
-                            dc.setTechFeeAmt(amount);
-                            dc.setMoFeeAmt(amount);
-                            dc.setNurseFeeAmt(amount);
-                        }
-                        //discount
-                        if (serviceId == Util1.getInteger(dcDiscountId)) {
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            //cash
-                            if (paymentId == 1) {
                                 gl.setSrcAccCode(payAcc);
-                                gl.setCash(true);
-                            } else {
-                                //credit
-                                gl.setSrcAccCode(balAcc);
-                                gl.setTraderCode(traderCode);
-                            }
-                            gl.setGlDate(vouDate);
-                            gl.setAccCode(Util1.isNull(accountCode, disAcc));
-                            gl.setCrAmt(amount);
-                            gl.setRefNo(vouNo);
-                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                            gl.setMacId(MAC_ID);
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setCurCode(curCode);
-                            gl.setRefNo(vouNo);
-                            gl.setDescription(serviceName);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setTranSource(tranSource);
-                            gl.setReference(reference);
-                            gl.setDeleted(deleted);
-                            gl.setServiceId(String.valueOf(serviceId));
-                            gl.setDoctorId(doctorId);
-                            gl.setPatientNo(patientNo);
-                            listGl.add(gl);
-                        } else if (serviceId == Util1.getInteger(dcPaidId) || serviceId == Util1.getInteger(dcDepositId)) {
-                            //paid or deposit
-                            //credit
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            gl.setGlDate(vouDate);
-                            gl.setSrcAccCode(Util1.isNull(accountCode, payAcc));
-                            gl.setAccCode(balAcc);
-                            gl.setDrAmt(amount);
-                            gl.setRefNo(vouNo);
-                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                            gl.setMacId(MAC_ID);
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setCurCode(curCode);
-                            gl.setRefNo(vouNo);
-                            gl.setDescription(serviceName);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setTranSource(tranSource);
-                            gl.setReference(reference);
-                            gl.setTraderCode(traderCode);
-                            gl.setDeleted(deleted);
-                            gl.setCash(true);
-                            gl.setServiceId(String.valueOf(serviceId));
-                            gl.setDoctorId(doctorId);
-                            gl.setPatientNo(patientNo);
-                            listGl.add(gl);
-
-                        } else if (serviceId == Util1.getInteger(dcRefundId)) {
-                            //refund
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            gl.setGlDate(vouDate);
-                            gl.setSrcAccCode(payAcc);
-                            if (!Util1.isNullOrEmpty(accountCode)) {
-                                gl.setAccCode(accountCode);
-                            } else {
-                                gl.setAccCode(balAcc);
-                                gl.setTraderCode(traderCode);
-                            }
-                            gl.setCrAmt(amount);
-                            gl.setRefNo(vouNo);
-                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                            gl.setMacId(MAC_ID);
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setCurCode(curCode);
-                            gl.setRefNo(vouNo);
-                            gl.setDescription(serviceName);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setTranSource(tranSource);
-                            gl.setReference(reference);
-                            gl.setTraderCode(traderCode);
-                            gl.setDeleted(deleted);
-                            gl.setCash(true);
-                            gl.setServiceId(String.valueOf(serviceId));
-                            gl.setDoctorId(doctorId);
-                            gl.setPatientNo(patientNo);
-                            listGl.add(gl);
-                        } else if (serviceId == Util1.getInteger(packageId)) {
-                            //refund
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            gl.setGlDate(vouDate);
-                            gl.setSrcAccCode(accountCode);
-                            gl.setAccCode(balAcc);
-                            if (amount < 0) {
-                                gl.setDrAmt(amount * -1);
-                            } else {
-                                gl.setCrAmt(amount);
-                            }
-                            gl.setRefNo(vouNo);
-                            gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                            gl.setMacId(MAC_ID);
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setCurCode(curCode);
-                            gl.setDescription(serviceName);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setTranSource(tranSource);
-                            gl.setReference(reference);
-                            gl.setTraderCode(traderCode);
-                            gl.setDeleted(deleted);
-                            gl.setServiceId(String.valueOf(serviceId));
-                            gl.setDoctorId(doctorId);
-                            gl.setPatientNo(patientNo);
-                            listGl.add(gl);
-                        } else {
-                            //income
-                            srcAcc = Util1.isNull(accountCode, srcAcc);
-                            if (amount != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setAccCode(srcAcc);
-                                if (paymentId == 1) {
-                                    gl.setSrcAccCode(payAcc);
-                                    gl.setCash(true);
+                                if (!Util1.isNullOrEmpty(accountCode)) {
+                                    gl.setAccCode(accountCode);
                                 } else {
-                                    //credit
+                                    gl.setAccCode(balAcc);
                                     gl.setTraderCode(traderCode);
-                                    gl.setSrcAccCode(balAcc);
                                 }
-                                if (amount > 0) {
-                                    gl.setDrAmt(amount);
-                                } else {
-                                    gl.setCrAmt(amount * -1);
-                                }
-
-                                gl.setGlDate(vouDate);
+                                gl.setCrAmt(amount);
                                 gl.setRefNo(vouNo);
                                 gl.setDeptCode(Util1.isNull(deptCode, mainDept));
                                 gl.setMacId(MAC_ID);
@@ -1726,23 +1761,68 @@ public class HMSIntegration {
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
+                                gl.setTraderCode(traderCode);
+                                gl.setDeleted(deleted);
+                                gl.setCash(true);
+                                gl.setServiceId(String.valueOf(serviceId));
+                                gl.setDoctorId(doctorId);
+                                gl.setPatientNo(patientNo);
+                                listGl.add(gl);
+                            } else if (serviceId == Util1.getInteger(packageId)) {
+                                //refund
+                                Gl gl = new Gl();
+                                GlKey key = new GlKey();
+                                key.setDeptId(1);
+                                key.setCompCode(compCode);
+                                gl.setKey(key);
+                                gl.setGlDate(vouDate);
+                                gl.setSrcAccCode(accountCode);
+                                gl.setAccCode(balAcc);
+                                if (amount < 0) {
+                                    gl.setDrAmt(amount * -1);
+                                } else {
+                                    gl.setCrAmt(amount);
+                                }
+                                gl.setRefNo(vouNo);
+                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                gl.setMacId(MAC_ID);
+                                gl.setCreatedBy(APP_NAME);
+                                gl.setCurCode(curCode);
+                                gl.setDescription(serviceName);
+                                gl.setCreatedDate(LocalDateTime.now());
+                                gl.setTranSource(tranSource);
+                                gl.setReference(reference);
+                                gl.setTraderCode(traderCode);
                                 gl.setDeleted(deleted);
                                 gl.setServiceId(String.valueOf(serviceId));
                                 gl.setDoctorId(doctorId);
                                 gl.setPatientNo(patientNo);
                                 listGl.add(gl);
-                                //payable
-                                if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
-                                    String[] accounts = payableAcc.split(",");
-                                    gl = new Gl();
-                                    key = new GlKey();
+                            } else {
+                                //income
+                                srcAcc = Util1.isNull(accountCode, srcAcc);
+                                if (amount != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
                                     key.setDeptId(1);
                                     key.setCompCode(compCode);
                                     gl.setKey(key);
+                                    gl.setAccCode(srcAcc);
+                                    if (paymentId == 1) {
+                                        gl.setSrcAccCode(payAcc);
+                                        gl.setCash(true);
+                                    } else {
+                                        //credit
+                                        gl.setTraderCode(traderCode);
+                                        gl.setSrcAccCode(balAcc);
+                                    }
+                                    if (amount > 0) {
+                                        gl.setDrAmt(amount);
+                                    } else {
+                                        gl.setCrAmt(amount * -1);
+                                    }
+
                                     gl.setGlDate(vouDate);
-                                    gl.setSrcAccCode(accounts[0]);
-                                    gl.setAccCode(accounts[1]);
-                                    gl.setCrAmt(amount);
                                     gl.setRefNo(vouNo);
                                     gl.setDeptCode(Util1.isNull(deptCode, mainDept));
                                     gl.setMacId(MAC_ID);
@@ -1758,140 +1838,171 @@ public class HMSIntegration {
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
                                     listGl.add(gl);
-                                }
-                            } else {
-                                deleteGl(tranSource, vouNo, srcAcc);
-                            }
-                        }
-                        //mo payable
-                        if (!Util1.isNullOrEmpty(moAcc)) {
-                            double moFeeAmt = Util1.getDouble(dc.getMoFeeAmt()) * qty;
-                            String[] accounts = moAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (moFeeAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (moFeeAmt > 0) {
-                                    gl.setCrAmt(moFeeAmt);
+                                    //payable
+                                    if (!Util1.isNullOrEmpty(payableAcc) && amount > 0) {
+                                        String[] accounts = payableAcc.split(",");
+                                        gl = new Gl();
+                                        key = new GlKey();
+                                        key.setDeptId(1);
+                                        key.setCompCode(compCode);
+                                        gl.setKey(key);
+                                        gl.setGlDate(vouDate);
+                                        gl.setSrcAccCode(accounts[0]);
+                                        gl.setAccCode(accounts[1]);
+                                        gl.setCrAmt(amount);
+                                        gl.setRefNo(vouNo);
+                                        gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                        gl.setMacId(MAC_ID);
+                                        gl.setCreatedBy(APP_NAME);
+                                        gl.setCurCode(curCode);
+                                        gl.setRefNo(vouNo);
+                                        gl.setDescription(serviceName);
+                                        gl.setCreatedDate(LocalDateTime.now());
+                                        gl.setTranSource(tranSource);
+                                        gl.setReference(reference);
+                                        gl.setDeleted(deleted);
+                                        gl.setServiceId(String.valueOf(serviceId));
+                                        gl.setDoctorId(doctorId);
+                                        gl.setPatientNo(patientNo);
+                                        listGl.add(gl);
+                                    }
                                 } else {
-                                    gl.setDrAmt(moFeeAmt);
+                                    deleteGl(tranSource, vouNo, srcAcc, chargeType);
                                 }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(String.valueOf(serviceId));
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
                             }
-                        }
-                        //tech payable
-                        if (!Util1.isNullOrEmpty(techAcc)) {
-                            double techAmt = Util1.getDouble(dc.getTechFeeAmt()) * qty;
-                            String[] accounts = techAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (techAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (techAmt > 0) {
-                                    gl.setCrAmt(techAmt);
+                            //mo payable
+                            if (!Util1.isNullOrEmpty(moAcc)) {
+                                double moFeeAmt = Util1.getDouble(dc.getMoFeeAmt()) * qty;
+                                String[] accounts = moAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (moFeeAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (moFeeAmt > 0) {
+                                        gl.setCrAmt(moFeeAmt);
+                                    } else {
+                                        gl.setDrAmt(moFeeAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
                                 } else {
-                                    gl.setDrAmt(techAmt);
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
                                 }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(String.valueOf(serviceId));
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
                             }
-                        }
-                        //nurse payable
-                        if (!Util1.isNullOrEmpty(nurseAcc)) {
-                            double nurseAmt = Util1.getDouble(dc.getNurseFeeAmt()) * qty;
-                            String[] accounts = nurseAcc.split(",");
-                            String sAcc = accounts[0];
-                            String acc = accounts[1];
-                            if (nurseAmt != 0) {
-                                Gl gl = new Gl();
-                                GlKey key = new GlKey();
-                                key.setDeptId(1);
-                                key.setCompCode(compCode);
-                                gl.setKey(key);
-                                gl.setGlDate(vouDate);
-                                gl.setSrcAccCode(sAcc);
-                                gl.setAccCode(acc);
-                                if (nurseAmt > 0) {
-                                    gl.setCrAmt(nurseAmt);
+                            //tech payable
+                            if (!Util1.isNullOrEmpty(techAcc)) {
+                                double techAmt = Util1.getDouble(dc.getTechFeeAmt()) * qty;
+                                String[] accounts = techAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (techAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (techAmt > 0) {
+                                        gl.setCrAmt(techAmt);
+                                    } else {
+                                        gl.setDrAmt(techAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
                                 } else {
-                                    gl.setDrAmt(nurseAmt);
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
                                 }
-                                gl.setRefNo(vouNo);
-                                gl.setDeptCode(Util1.isNull(deptCode, mainDept));
-                                gl.setMacId(MAC_ID);
-                                gl.setCreatedBy(APP_NAME);
-                                gl.setCurCode(curCode);
-                                gl.setRefNo(vouNo);
-                                gl.setDescription(serviceName);
-                                gl.setCreatedDate(LocalDateTime.now());
-                                gl.setTranSource(tranSource);
-                                gl.setReference(reference);
-                                gl.setDeleted(deleted);
-                                gl.setServiceId(String.valueOf(serviceId));
-                                gl.setDoctorId(doctorId);
-                                gl.setPatientNo(patientNo);
-                                listGl.add(gl);
-                            } else {
-                                deleteGl(tranSource, vouNo, sAcc);
+                            }
+                            //nurse payable
+                            if (!Util1.isNullOrEmpty(nurseAcc)) {
+                                double nurseAmt = Util1.getDouble(dc.getNurseFeeAmt()) * qty;
+                                String[] accounts = nurseAcc.split(",");
+                                String sAcc = accounts[0];
+                                String acc = accounts[1];
+                                if (nurseAmt != 0) {
+                                    Gl gl = new Gl();
+                                    GlKey key = new GlKey();
+                                    key.setDeptId(1);
+                                    key.setCompCode(compCode);
+                                    gl.setKey(key);
+                                    gl.setGlDate(vouDate);
+                                    gl.setSrcAccCode(sAcc);
+                                    gl.setAccCode(acc);
+                                    gl.setDescription(serviceName);
+                                    if (nurseAmt > 0) {
+                                        gl.setCrAmt(nurseAmt);
+                                    } else {
+                                        gl.setDrAmt(nurseAmt * -1);
+                                        gl.setDescription("Return : " + serviceName);
+                                    }
+                                    gl.setRefNo(vouNo);
+                                    gl.setDeptCode(Util1.isNull(deptCode, mainDept));
+                                    gl.setMacId(MAC_ID);
+                                    gl.setCreatedBy(APP_NAME);
+                                    gl.setCurCode(curCode);
+                                    gl.setRefNo(vouNo);
+                                    gl.setCreatedDate(LocalDateTime.now());
+                                    gl.setTranSource(tranSource);
+                                    gl.setReference(reference);
+                                    gl.setDeleted(deleted);
+                                    gl.setServiceId(String.valueOf(serviceId));
+                                    gl.setDoctorId(doctorId);
+                                    gl.setPatientNo(patientNo);
+                                    listGl.add(gl);
+                                } else {
+                                    deleteGl(tranSource, vouNo, sAcc, chargeType);
+                                }
                             }
                         }
-                    }
-                    if (!listGl.isEmpty()) {
-                        sendAccount(listGl);
-                        log.info(String.format("sendDCVoucherToAccount: %s", vouNo));
+                        if (!listGl.isEmpty()) {
+                            sendAccount(listGl);
+                            log.info(String.format("sendDCVoucherToAccount: %s", vouNo));
+                        } else {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            dcHisRepo.updateDC(vouNo, FOC);
+                        }
                     } else {
-                        deleteGl(tranSource, vouNo, null);
-                        dcHisRepo.updateDC(vouNo, FOC);
+                        dcHisRepo.updateDC(vouNo, ERR);
                     }
-                } else {
-                    dcHisRepo.updateDC(vouNo, ERR);
-                }
 
+                }
             }
         }
     }
@@ -1902,134 +2013,183 @@ public class HMSIntegration {
     }
 
     public void sendOPDReceiveToAccount(OPDReceive receive) {
-        if (Util1.getBoolean(uploadOPDBill)) {
-            Integer id = receive.getBillId();
-            Date payDate = receive.getPayDate();
-            LocalDateTime vouDate = Util1.parseLocalDateTime(receive.getPayDate());
-            double payAmt = Util1.getDouble(receive.getPayAmt());
-            String regNo = receive.getPatient().getPatientNo();
-            String curCode = receive.getCurrency().getAccCurCode();
-            boolean deleted = receive.isDeleted();
-            String tranSource;
-            String deptCode;
-            String cashAcc;
-            String balAcc;
-            String traderCode;
-            String description;
-            if (reportService.isAdmission(Util1.toDateStr(payDate, "yyyy-MM-dd"), regNo, id)) {
-                tranSource = "DC";
-                AccountSetting ac = hmAccSetting.get(tranSource);
-                deptCode = ac.getDeptCode();
-                cashAcc = ac.getPayAcc();
-                balAcc = ac.getBalanceAcc();
-                traderCode = inPatientCode;
-                description = "Inpatient Bill";
-
-            } else {
-                tranSource = "OPD";
-                AccountSetting ac = hmAccSetting.get(tranSource);
-                deptCode = ac.getDeptCode();
-                cashAcc = ac.getPayAcc();
-                balAcc = ac.getBalanceAcc();
-                traderCode = outPatientCode;
-                description = "Outpatient Bill";
-            }
-            String reference = null;
-            if (!Objects.isNull(receive.getPatient())) {
-                String patientNo = receive.getPatient().getPatientNo();
-                String patientName = receive.getPatient().getPatientName();
-                reference = String.format("%s : %s", patientNo, patientName);
-            }
-            if (payAmt != 0) {
-                List<Gl> list = new ArrayList<>();
-                Gl gl = new Gl();
-                GlKey key = new GlKey();
-                key.setDeptId(1);
-                key.setCompCode(compCode);
-                gl.setKey(key);
-                gl.setGlDate(vouDate);
-                if (payAmt > 0) {
-                    gl.setDrAmt(payAmt);
-                    gl.setDescription(String.format("%s %s", description, "Received"));
-                } else {
-                    gl.setCrAmt(payAmt * -1);
-                    gl.setDescription(String.format("%s %s", description, "Refund"));
+        if (Util1.compareDate(receive.getPayDate(), syncDate)) {
+            if (Util1.getBoolean(uploadOPDBill)) {
+                Integer id = receive.getBillId();
+                if (Util1.getBoolean(receive.getAdjust())) {
+                    updateOPDReceive(id, "ADJUST");
+                    return;
                 }
-                gl.setSrcAccCode(cashAcc);
-                gl.setAccCode(balAcc);
-                gl.setRefNo(String.valueOf(id));
-                gl.setDeptCode(deptCode);
-                gl.setMacId(MAC_ID);
-                gl.setCreatedBy(APP_NAME);
-                gl.setCurCode(curCode);
-                gl.setDescription(description);
-                gl.setCreatedDate(LocalDateTime.now());
-                gl.setTranSource(tranSource);
-                gl.setReference(reference);
-                gl.setTraderCode(traderCode);
-                gl.setDeleted(deleted);
-                gl.setCash(true);
-                gl.setPatientNo(regNo);
-                list.add(gl);
-                log.info(String.format("sendOPDReceiveToAccount: %s", id));
-                sendAccount(list);
-            }
+                LocalDateTime vouDate = receive.getPayDate();
+                double payAmt = Util1.getDouble(receive.getPayAmt());
+                double discount = Util1.getDouble(receive.getDiscount());
+                String regNo = receive.getPatient().getPatientNo();
+                String curCode = receive.getCurrency().getAccCurCode();
+                boolean deleted = receive.isDeleted();
+                String tranSource;
+                String deptCode;
+                String cashAcc;
+                String balAcc;
+                String disAcc;
+                String traderCode;
+                String description;
+                if (reportService.isAdmission(Util1.toDateStr(vouDate), regNo, id)) {
+                    tranSource = "DC";
+                    AccountSetting ac = hmAccSetting.get(tranSource);
+                    deptCode = ac.getDeptCode();
+                    cashAcc = ac.getPayAcc();
+                    balAcc = ac.getBalanceAcc();
+                    traderCode = inPatientCode;
+                    disAcc = ac.getDiscountAcc();
+                    description = "Inpatient Bill";
+                } else {
+                    tranSource = "OPD";
+                    AccountSetting ac = hmAccSetting.get(tranSource);
+                    deptCode = ac.getDeptCode();
+                    cashAcc = ac.getPayAcc();
+                    balAcc = ac.getBalanceAcc();
+                    traderCode = outPatientCode;
+                    disAcc = ac.getDiscountAcc();
+                    description = "Outpatient Bill";
+                }
+                String reference = null;
+                Patient p = receive.getPatient();
+                if (!Objects.isNull(p)) {
+                    String patientNo = receive.getPatient().getPatientNo();
+                    String patientName = receive.getPatient().getPatientName();
+                    reference = String.format("%s : %s", patientNo, patientName);
+                    TraderGroup g = p.getGroup();
+                    if (g != null) {
+                        traderCode = Util1.isNull(g.getTraderCode(), traderCode);
+                        balAcc = Util1.isNull(g.getAccountId(), balAcc);
+                    }
+                }
+                List<Gl> list = new ArrayList<>();
+                if (payAmt != 0) {
+                    Gl gl = new Gl();
+                    GlKey key = new GlKey();
+                    key.setDeptId(1);
+                    key.setCompCode(compCode);
+                    gl.setKey(key);
+                    gl.setGlDate(vouDate);
+                    if (payAmt > 0) {
+                        gl.setDrAmt(payAmt);
+                        gl.setDescription(String.format("%s %s", description, "Received"));
+                    } else {
+                        gl.setCrAmt(payAmt * -1);
+                        gl.setDescription(String.format("%s %s", description, "Refund"));
+                    }
+                    gl.setSrcAccCode(cashAcc);
+                    gl.setAccCode(balAcc);
+                    gl.setRefNo(String.valueOf(id));
+                    gl.setDeptCode(deptCode);
+                    gl.setMacId(MAC_ID);
+                    gl.setCreatedBy(APP_NAME);
+                    gl.setCurCode(curCode);
+                    gl.setCreatedDate(LocalDateTime.now());
+                    gl.setTranSource("BILL_PAYMENT");
+                    gl.setReference(reference);
+                    gl.setTraderCode(traderCode);
+                    gl.setDeleted(deleted);
+                    gl.setCash(true);
+                    gl.setPatientNo(regNo);
+                    list.add(gl);
+                }
+                if (discount != 0) {
+                    Gl gl = new Gl();
+                    GlKey key = new GlKey();
+                    key.setDeptId(1);
+                    key.setCompCode(compCode);
+                    gl.setKey(key);
+                    gl.setGlDate(vouDate);
+                    gl.setDescription(String.format("%s %s", description, "Discount"));
+                    gl.setSrcAccCode(disAcc);
+                    gl.setAccCode(balAcc);
+                    gl.setDrAmt(discount);
+                    gl.setRefNo(String.valueOf(id));
+                    gl.setDeptCode(deptCode);
+                    gl.setMacId(MAC_ID);
+                    gl.setCreatedBy(APP_NAME);
+                    gl.setCurCode(curCode);
+                    gl.setCreatedDate(LocalDateTime.now());
+                    gl.setTranSource("BILL_PAYMENT");
+                    gl.setReference(reference);
+                    gl.setTraderCode(traderCode);
+                    gl.setDeleted(deleted);
+                    gl.setCash(true);
+                    gl.setPatientNo(regNo);
+                    list.add(gl);
+                }
+                if (!list.isEmpty()) {
+                    sendAccount(list);
+                    log.info(String.format("sendOPDReceiveToAccount: %s", id));
+                }
 
+
+            }
         }
     }
 
 
     private void updateOPDReceive(Integer id, String status) {
         opdReceiveRepo.updateOPD(id, status);
-        log.info(String.format("updateOPDReceive: %s", id));
+        log.info(String.format("updateOPDPayment: %s", id));
     }
 
     public void sendGeneralExpenseToAcc(GenExpense ge) {
-        if (Util1.getBoolean(uploadExpense)) {
-            String tranSource = ge.isUnpaid() ? "UNPAID" : "EXPENSE";
-            String geneId = ge.getGenId().toString();
-            if (ge.isDeleted()) {
-                deleteGl(tranSource, geneId, null);
-            } else {
-                List<Gl> listGl = new ArrayList<>();
-                String description = ge.getDescription();
-                LocalDateTime expDate = Util1.parseLocalDateTime(ge.getExpDate());
-                String remark = ge.getRemark();
-                String srcAcc = ge.getSrcAcc();
-                String account = ge.getAccount();
-                String depCode = ge.getDeptCode();
-                String curCode = ge.getCurrency() == null ? "MMK" : ge.getCurrency().getAccCurCode();
-                String expenseId = ge.getGenId().toString();
-                double expAmt = ge.getExpAmt();
-                boolean deleted = ge.isDeleted();
-                if (Util1.getDouble(expAmt) > 0) {
-                    Gl gl = new Gl();
-                    GlKey key = new GlKey();
-                    key.setDeptId(1);
-                    key.setCompCode(compCode);
-                    gl.setKey(key);
-                    gl.setGlDate(expDate);
-                    gl.setSrcAccCode(srcAcc);
-                    gl.setAccCode(account);
-                    gl.setCrAmt(expAmt);
-                    gl.setRefNo(expenseId);
-                    gl.setDeptCode(depCode);
-                    gl.setMacId(MAC_ID);
-                    gl.setCreatedBy(APP_NAME);
-                    gl.setCurCode(curCode);
-                    gl.setDescription(description);
-                    gl.setCreatedDate(LocalDateTime.now());
-                    gl.setTranSource(tranSource);
-                    gl.setReference(remark);
-                    gl.setDeleted(deleted);
-                    gl.setCash(true);
-                    listGl.add(gl);
-                }
-                if (!listGl.isEmpty()) {
-                    sendAccount(listGl);
-                    log.info(String.format("sendGeneralExpenseToAcc: %s", expenseId));
+        if (Util1.compareDate(ge.getExpDate(), syncDate)) {
+            if (Util1.getBoolean(uploadExpense)) {
+                String tranSource = ge.isUnpaid() ? "UNPAID" : "EXPENSE";
+                String geneId = ge.getGenId().toString();
+                if (ge.isDeleted()) {
+                    deleteGl(tranSource, geneId, null, 2);
+                } else {
+                    List<Gl> listGl = new ArrayList<>();
+                    String description = ge.getDescription();
+                    LocalDateTime expDate = ge.getExpDate();
+                    String remark = ge.getRemark();
+                    String srcAcc = ge.getSrcAcc();
+                    String account = ge.getAccount();
+                    String depCode = ge.getDeptCode();
+                    String curCode = ge.getCurrency() == null ? "MMK" : ge.getCurrency().getAccCurCode();
+                    String expenseId = ge.getGenId().toString();
+                    double expAmt = Util1.getDouble(ge.getExpAmt());
+                    boolean deleted = ge.isDeleted();
+                    if (expAmt != 0) {
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(expDate);
+                        gl.setSrcAccCode(srcAcc);
+                        gl.setAccCode(account);
+                        gl.setDescription(description);
+                        if (expAmt > 0) {
+                            gl.setCrAmt(expAmt);
+                        } else {
+                            gl.setDescription("Return : " + description);
+                            gl.setDrAmt(expAmt * -1);
+                        }
+                        gl.setRefNo(expenseId);
+                        gl.setDeptCode(depCode);
+                        gl.setMacId(MAC_ID);
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setCurCode(curCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setTranSource(tranSource);
+                        gl.setReference(remark);
+                        gl.setDeleted(deleted);
+                        gl.setCash(true);
+                        listGl.add(gl);
+                    }
+                    if (!listGl.isEmpty()) {
+                        sendAccount(listGl);
+                        log.info(String.format("sendGeneralExpenseToAcc: %s", expenseId));
+                    }
                 }
             }
+
         }
     }
 
@@ -2115,6 +2275,8 @@ public class HMSIntegration {
                     gl.setDeleted(deleted);
                     gl.setCash(true);
                     listGl.add(gl);
+                } else {
+                    updatePayment(payId, ERR);
                 }
                 if (discount > 0) {
                     Gl gl = new Gl();
@@ -2176,10 +2338,12 @@ public class HMSIntegration {
                 coa.setMacId(MAC_ID);
                 coa.setOption("USR");
                 coa.setMigCode(String.valueOf(opd.getCatId()));
-                updateOPDCOA(saveCOA(coa), ACK);
-                log.info(String.format("sendOPDGroup: %s", opd.getCatName()));
+                saveCOA(coa).doOnSuccess(s -> {
+                    updateOPDCOA(s, ACK);
+                    log.info(String.format("sendOPDGroup: %s", opd.getCatName()));
+                }).block();
             } else {
-                log.info("coa parent is not assigned.");
+                log.info("coa parent is not assigned at opd");
             }
         }
     }
@@ -2189,6 +2353,9 @@ public class HMSIntegration {
             return false;
         }
         if (!otServiceRepo.searchGroup(groupId, Util1.getInteger(otPaidId)).isEmpty()) {
+            return false;
+        }
+        if (!otServiceRepo.searchGroup(groupId, Util1.getInteger(otRefundId)).isEmpty()) {
             return false;
         }
         return otServiceRepo.searchGroup(groupId, Util1.getInteger(otDiscountId)).isEmpty();
@@ -2214,11 +2381,14 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(groupId));
-                    updateOTCOA(saveCOA(coa), ACK);
-                    log.info(String.format("sendOTGroup: %s", ot.getGroupName()));
+                    saveCOA(coa).doOnSuccess(s -> {
+                        updateOTCOA(s, ACK);
+                        log.info(String.format("sendOTGroup: %s", ot.getGroupName()));
+                    }).block();
+
                 }
             } else {
-                log.info("coa parent is not assigned.");
+                log.info("coa parent is not assigned at ot.");
             }
         }
     }
@@ -2228,6 +2398,9 @@ public class HMSIntegration {
             return false;
         }
         if (!dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcDiscountId)).isEmpty()) {
+            return false;
+        }
+        if (!dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcRefundId)).isEmpty()) {
             return false;
         }
         return dcServiceRepo.searchGroup(groupId, Util1.getInteger(dcPaidId)).isEmpty();
@@ -2253,11 +2426,11 @@ public class HMSIntegration {
                     coa.setMacId(MAC_ID);
                     coa.setOption("USR");
                     coa.setMigCode(String.valueOf(dc.getGroupId()));
-                    updateDCCOA(saveCOA(coa), ACK);
+                    saveCOA(coa).doOnSuccess(s -> updateDCCOA(s, ACK)).block();
                     log.info(String.format("sendDCGroup: %s", dc.getGroupName()));
                 }
             } else {
-                log.info("coa parent is not assigned.");
+                log.info("coa parent is not assigned at dc.");
             }
         }
     }

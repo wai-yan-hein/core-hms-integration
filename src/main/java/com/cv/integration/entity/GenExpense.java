@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Data
@@ -16,8 +18,8 @@ public class GenExpense {
     private Integer genId;
     @Column(name = "desp")
     private String description;
-    @Column(name = "exp_date")
-    private Date expDate;
+    @Column(name = "exp_date",columnDefinition = "TIMESTAMP")
+    private LocalDateTime expDate;
     @Column(name = "remark")
     private String remark;
     @Column(name = "vou_no")
