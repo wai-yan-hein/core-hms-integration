@@ -3,6 +3,7 @@ package com.cv.integration.listener;
 import com.cv.integration.common.Util1;
 import com.cv.integration.entity.*;
 import com.cv.integration.repo.*;
+import com.cv.integration.service.LabCostUpdateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,13 +80,16 @@ public class AutoUpload {
     @Autowired
     private Environment environment;
     private boolean syncing = false;
+    @Autowired
+    private LabCostUpdateService lcuService;
 
-    @Scheduled(fixedRate = 10 * 60 * 1000)
+    //@Scheduled(fixedRate = 10 * 60 * 1000)
+    @Scheduled(fixedRate = 1 * 60 * 1000)
     private void autoUpload() {
         if (!syncing) {
             //log.info("autoUpload: Start");
             syncing = true;
-            uploadOPDSetup();
+            /*uploadOPDSetup();
             uploadOTSetup();
             uploadDCSetup();
             uploadTrader();
@@ -99,7 +103,10 @@ public class AutoUpload {
             uploadOTVoucher();
             uploadDCVoucher();
             uploadExpense();
-            uploadOPDReceive();
+            uploadOPDReceive();*/
+            log.info("updateLabCost : Start");
+            lcuService.updateLabCost();
+            log.info("updateLabCost : End");
             syncing = false;
             //log.info("autoUpload: End");
         }
