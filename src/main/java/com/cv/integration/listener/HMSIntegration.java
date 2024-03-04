@@ -147,8 +147,8 @@ public class HMSIntegration {
                     .onErrorResume(throwable -> {
                         // Handle the error case when the server is down
                         log.error("sendAccount: " + throwable.getMessage());
-                        String code = glList.get(0).getRefNo();
-                        String tranSource = glList.get(0).getTranSource();
+                        String code = glList.getFirst().getRefNo();
+                        String tranSource = glList.getFirst().getTranSource();
                         update(tranSource, code, null);
                         return Mono.empty(); // Return an empty Mono or a default response
                     }).block();
