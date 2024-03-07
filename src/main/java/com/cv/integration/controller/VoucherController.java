@@ -43,6 +43,12 @@ public class VoucherController {
         return ResponseEntity.status(HttpStatus.FOUND).body("OK");
     }
 
+    @PostMapping("/sale1")
+    private ResponseEntity<?> saleVoucher1(@RequestParam(name = "vouNo") String vouNo) {
+        log.info("/sale : " + vouNo);
+        return ResponseEntity.status(HttpStatus.FOUND).body("OK");
+    }
+
     @PostMapping("/sale")
     private Mono<?> saleVoucher(@RequestParam String vouNo) {
         log.info("/sale : " + vouNo);
@@ -93,6 +99,7 @@ public class VoucherController {
         Optional<OPDHis> option = opdHisRepo.findById(vouNo);
         if (option.isPresent()) {
             integration.sendOPDVoucherToAccount(option.get());
+
             return ResponseEntity.status(HttpStatus.CREATED).body("Sent");
         }
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Voucher Not found.");
