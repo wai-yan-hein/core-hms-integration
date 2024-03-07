@@ -5,10 +5,10 @@ import com.cv.integration.entity.*;
 import com.cv.integration.repo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -43,66 +43,53 @@ public class AutoUpload {
     private String uploadExpense;
     @Value("${upload.bill}")
     private String uploadOPDBill;
-    @Autowired
     private final TraderOpeningRepo traderOpeningRepo;
-    @Autowired
     private final HMSIntegration listener;
-    @Autowired
     private final SaleHisRepo saleHisRepo;
-    @Autowired
     private final PurHisRepo purHisRepo;
-    @Autowired
     private final ReturnInRepo returnInRepo;
-    @Autowired
     private final ReturnOutRepo returnOutRepo;
-    @Autowired
     private final OPDHisRepo opdHisRepo;
-    @Autowired
     private final OTHisRepo otHisRepo;
-    @Autowired
     private final DCHisRepo dcHisRepo;
-    @Autowired
     private final TraderRepo traderRepo;
-
-    @Autowired
     private final PaymentHisRepo paymentHis;
-    @Autowired
     private final GenExpenseRepo genExpenseRepo;
-    @Autowired
     private final OPDReceiveRepo opdReceiveRepo;
-    @Autowired
     private final OPDCategoryRepo opdGroupRepo;
-    @Autowired
     private final OTGroupRepo otGroupRepo;
-    @Autowired
     private final DCGroupRepo dcGroupRepo;
-    @Autowired
-    private Environment environment;
+    private final Environment environment;
+    private final TaskExecutor taskExecutor;
     private boolean syncing = false;
 
     @Scheduled(fixedRate = 10 * 60 * 1000)
-    private void autoUpload() {
+    public void autoUpload() {
         if (!syncing) {
-            //log.info("autoUpload: Start");
-            syncing = true;
-            uploadOPDSetup();
-            uploadOTSetup();
-            uploadDCSetup();
-            uploadTrader();
-            uploadTraderOpening();
-            uploadSaleVoucher();
-            uploadPurchaseVoucher();
-            uploadReturnInVoucher();
-            uploadPayment();
-            uploadReturnOutVoucher();
-            uploadOPDVoucher();
-            uploadOTVoucher();
-            uploadDCVoucher();
-            uploadExpense();
-            uploadOPDReceive();
-            syncing = false;
-            //log.info("autoUpload: End");
+            taskExecutor.execute(() -> {
+                log.info("autoUpload: Start");
+                syncing = true;
+                uploadOPDSetup();
+                uploadOTSetup();
+                uploadDCSetup();
+                uploadTrader();
+                uploadTraderOpening();
+                uploadSaleVoucher();
+                uploadPurchaseVoucher();
+                uploadReturnInVoucher();
+                uploadPayment();
+                uploadReturnOutVoucher();
+                uploadOPDVoucher();
+                uploadOTVoucher();
+                uploadDCVoucher();
+                uploadExpense();
+                uploadOPDReceive();
+                syncing = false;
+                log.info("autoUpload: End");
+
+            });
         }
+
     }
 
     private boolean isCashOnly() {
@@ -159,150 +146,90 @@ public class AutoUpload {
 
     private void uploadSaleVoucher() {
         if (Util1.getBoolean(uploadSale)) {
-            List<SaleHis> vouchers = saleHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<SaleHis> vouchers = isCashOnly() ?
+                    saleHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
+                    saleHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadSaleVoucher: %s", vouchers.size()));
-                for (SaleHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendSaleVoucherToAccount(vou);
-                        } else {
-                            listener.updateSale(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendSaleVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendSaleVoucherToAccount);
             }
         }
     }
 
     private void uploadPurchaseVoucher() {
         if (Util1.getBoolean(uploadPurchase)) {
-            List<PurHis> vouchers = purHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<PurHis> vouchers = isCashOnly() ?
+                    purHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
+                    purHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadPurchaseVoucher: %s", vouchers.size()));
-                for (PurHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendPurchaseVoucherToAccount(vou);
-                        } else {
-                            listener.updatePurchase(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendPurchaseVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendPurchaseVoucherToAccount);
             }
         }
     }
 
     private void uploadReturnInVoucher() {
         if (Util1.getBoolean(uploadReturnIn)) {
-            List<RetInHis> vouchers = returnInRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<RetInHis> vouchers = isCashOnly() ?
+                    returnInRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
+                    returnInRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnInVoucher: %s", vouchers.size()));
-                for (RetInHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendReturnInVoucherToAccount(vou);
-                        } else {
-                            listener.updateReturnIn(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendReturnInVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendReturnInVoucherToAccount);
             }
         }
     }
 
     private void uploadReturnOutVoucher() {
         if (Util1.getBoolean(uploadReturnOut)) {
-            List<RetOutHis> vouchers = returnOutRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<RetOutHis> vouchers = isCashOnly() ?
+                    returnOutRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
+                    returnOutRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnOutVoucher: %s", vouchers.size()));
-                for (RetOutHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendReturnOutVoucherToAccount(vou);
-                        } else {
-                            listener.updateReturnOut(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendReturnOutVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendReturnOutVoucherToAccount);
             }
         }
     }
 
     private void uploadOPDVoucher() {
         if (Util1.getBoolean(uploadOPD)) {
-            List<OPDHis> vouchers = opdHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<OPDHis> vouchers = isCashOnly() ?
+                    opdHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
+                    opdHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDVoucher: %s", vouchers.size()));
-                for (OPDHis op : vouchers) {
-                    if (isCashOnly()) {
-                        if (op.getVouPaid() != 0) {
-                            listener.sendOPDVoucherToAccount(op);
-                        } else {
-                            listener.updateOPD(op.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendOPDVoucherToAccount(op);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendOPDVoucherToAccount);
             }
         }
     }
 
     private void uploadOTVoucher() {
         if (Util1.getBoolean(uploadOT)) {
-            List<OTHis> vouchers = otHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<OTHis> vouchers = isCashOnly() ?
+                    otHisRepo.unUploadVoucherCash(Util1.toDate(syncDate))
+                    : otHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOTVoucher: %s", vouchers.size()));
-                for (OTHis ot : vouchers) {
-                    if (isCashOnly()) {
-                        if (ot.getVouPaid() > 0) {
-                            listener.sendOTVoucherToAccount(ot);
-                        } else {
-                            listener.updateOT(ot.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendOTVoucherToAccount(ot);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendOTVoucherToAccount);
+            }
+        }
+
+    }
+
+
+    private void uploadDCVoucher() {
+        if (Util1.getBoolean(uploadDC)) {
+            List<DCHis> vouchers = isCashOnly() ?
+                    dcHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
+                    dcHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            if (!vouchers.isEmpty()) {
+                log.info(String.format("uploadDCVoucher: %s", vouchers.size()));
+                vouchers.forEach(listener::sendDCVoucherToAccount);
             }
         }
     }
 
-    private void uploadDCVoucher() {
-        if (Util1.getBoolean(uploadDC)) {
-            List<DCHis> vouchers = dcHisRepo.unUploadVoucher(Util1.toDate(syncDate));
-            if (!vouchers.isEmpty()) {
-                log.info(String.format("uploadDCVoucher: %s", vouchers.size()));
-                for (DCHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendDCVoucherToAccount(vou);
-                        } else {
-                            listener.updateDC(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendDCVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
-            }
-        }
-    }
 
     private void uploadPayment() {
         if (Util1.getBoolean(uploadPayment)) {
@@ -311,7 +238,6 @@ public class AutoUpload {
                 log.info(String.format("uploadPayment: %s", vouchers.size()));
                 for (PaymentHis vou : vouchers) {
                     listener.sendPaymentToAcc(vou);
-                    sleep();
                 }
             }
         }
@@ -332,21 +258,10 @@ public class AutoUpload {
             List<OPDReceive> vouchers = opdReceiveRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDReceive: %s", vouchers.size()));
-                vouchers.forEach(opd -> {
-                    listener.sendOPDReceiveToAccount(opd);
-                    sleep();
-                });
+                vouchers.forEach(listener::sendOPDReceiveToAccount);
             }
 
         }
-    }
-
-    private void sleep() {
-       /* try {
-            TimeUnit.MILLISECONDS.sleep(1);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }*/
     }
 
 }

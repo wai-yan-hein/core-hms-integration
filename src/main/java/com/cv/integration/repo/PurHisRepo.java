@@ -13,6 +13,8 @@ import java.util.List;
 public interface PurHisRepo extends JpaRepository<PurHis, String> {
     @Query("select o from PurHis o where o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
     List<PurHis> unUploadVoucher(@Param("vou_date") Date syncDate);
+    @Query("select o from PurHis o where o.vouPaid<>0 and o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
+    List<PurHis> unUploadVoucherCash(@Param("vou_date") Date syncDate);
 
     @Transactional
     @Modifying

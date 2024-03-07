@@ -7,13 +7,14 @@ import com.cv.integration.repo.*;
 import com.cv.integration.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -22,75 +23,40 @@ import java.util.*;
 @RequiredArgsConstructor
 @PropertySource("file:config/application.properties")
 public class HMSIntegration {
-    @Autowired
     private final AccountSettingRepo accountSetting;
-    @Autowired
     private final SaleHisRepo saleHisRepo;
-    @Autowired
     private final PurHisRepo purHisRepo;
-    @Autowired
     private final ReturnInRepo returnInRepo;
-    @Autowired
     private final ReturnOutRepo returnOutRepo;
-    @Autowired
     private final OPDHisRepo opdHisRepo;
-    @Autowired
     private final OTHisRepo otHisRepo;
-    @Autowired
     private final OTHisDetailRepo otHisDetailRepo;
-    @Autowired
     private final DCHisRepo dcHisRepo;
-    @Autowired
     private final DCHisDetailRepo dcHisDetailRepo;
-    @Autowired
     private final OPDHisDetailRepo opdHisDetailRepo;
-    @Autowired
     private final OPDReceiveRepo opdReceiveRepo;
-    @Autowired
     private final TraderRepo traderRepo;
-
-    @Autowired
     private final GenExpenseRepo genExpenseRepo;
-    @Autowired
     private final PaymentHisRepo paymentHisRepo;
-    @Autowired
     private final DCDoctorFeeRepo dcDoctorFeeRepo;
-    @Autowired
     private final OTDoctorFeeRepo otDoctorFeeRepo;
-    @Autowired
     private final TraderOpeningRepo traderOpeningRepo;
-    @Autowired
     private final OTServiceRepo otServiceRepo;
-    @Autowired
     private final DCServiceRepo dcServiceRepo;
-    @Autowired
     private final String packageId;
-    @Autowired
-    private OPDCategoryRepo opdCategoryRepo;
-    @Autowired
-    private DCGroupRepo dcGroupRepo;
-    @Autowired
-    private ReportService reportService;
-    @Autowired
+    private final OPDCategoryRepo opdCategoryRepo;
+    private final DCGroupRepo dcGroupRepo;
+    private final ReportService reportService;
     private final Map<String, AccountSetting> hmAccSetting;
-    @Autowired
     private final String dcDepositId;
-    @Autowired
     private final String dcDiscountId;
-    @Autowired
     private final String dcPaidId;
-    @Autowired
     private final String dcRefundId;
-    @Autowired
     private final String otDepositId;
-    @Autowired
     private final String otDiscountId;
-    @Autowired
     private final String otPaidId;
-    @Autowired
     private final String otRefundId;
-    @Autowired
-    private OTGroupRepo otGroupRepo;
+    private final OTGroupRepo otGroupRepo;
     @Value("${upload.trader}")
     private String uploadTrader;
     @Value("${upload.sale}")
@@ -130,33 +96,30 @@ public class HMSIntegration {
     private final Integer MAC_ID = 99;
     private final String FOC = "FOC";
     private final String ERR = "ERR";
-    @Autowired
-    private WebClient accountApi;
-    @Autowired
-    private UserRepo userRepo;
+    private final WebClient accountApi;
+    private final UserRepo userRepo;
 
     private void sendAccount(List<Gl> glList) {
         if (!glList.isEmpty()) {
-            Response response = accountApi.post().uri("/account/saveGlList")
+            accountApi.post().uri("/account/saveGlList")
                     .body(Mono.just(glList), List.class)
                     .retrieve()
                     .bodyToMono(Response.class)
-                    //.retryWhen(Retry.backoff(3, Duration.ofSeconds(10))
-                    //.maxBackoff(Duration.ofMinutes(1))) // Retry 3 times with a backoff of 10 seconds
-                    //.timeout(Duration.ofSeconds(1)) // Timeout after 5 minutes
-                    .onErrorResume(throwable -> {
-                        // Handle the error case when the server is down
-                        log.error("sendAccount: " + throwable.getMessage());
+                    .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
+                            .maxBackoff(Duration.ofMinutes(5))
+                            .doAfterRetry(retrySignal -> log.error("Inventory Retrying..."))
+                    )
+                    .doOnError(e -> {
+                        log.error("sendAccount: " + e.getMessage());
                         String code = glList.getFirst().getRefNo();
                         String tranSource = glList.getFirst().getTranSource();
                         update(tranSource, code, null);
-                        return Mono.empty(); // Return an empty Mono or a default response
+                    }).doOnSuccess(response -> {
+                        String code = response.getVouNo();
+                        String tranSource = response.getTranSource();
+                        update(tranSource, code, ACK);
                     }).block();
-            if (response != null) {
-                String code = response.getVouNo();
-                String tranSource = response.getTranSource();
-                update(tranSource, code, ACK);
-            }
+
         }
     }
 
@@ -2336,7 +2299,7 @@ public class HMSIntegration {
                 coa.setCreatedBy(APP_NAME);
                 coa.setCreatedDate(LocalDateTime.now());
                 coa.setMacId(MAC_ID);
-                coa.setOption("USR");
+                coa.setCoaOption("USR");
                 coa.setMigCode(String.valueOf(opd.getCatId()));
                 saveCOA(coa).doOnSuccess(s -> {
                     updateOPDCOA(s, ACK);
@@ -2379,7 +2342,7 @@ public class HMSIntegration {
                     coa.setCreatedBy(APP_NAME);
                     coa.setCreatedDate(LocalDateTime.now());
                     coa.setMacId(MAC_ID);
-                    coa.setOption("USR");
+                    coa.setCoaOption("USR");
                     coa.setMigCode(String.valueOf(groupId));
                     saveCOA(coa).doOnSuccess(s -> {
                         updateOTCOA(s, ACK);
@@ -2424,7 +2387,7 @@ public class HMSIntegration {
                     coa.setCreatedBy(APP_NAME);
                     coa.setCreatedDate(LocalDateTime.now());
                     coa.setMacId(MAC_ID);
-                    coa.setOption("USR");
+                    coa.setCoaOption("USR");
                     coa.setMigCode(String.valueOf(dc.getGroupId()));
                     saveCOA(coa).doOnSuccess(s -> updateDCCOA(s, ACK)).block();
                     log.info(String.format("sendDCGroup: %s", dc.getGroupName()));

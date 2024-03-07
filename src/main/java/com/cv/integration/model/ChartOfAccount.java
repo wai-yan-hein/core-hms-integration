@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Data
@@ -16,7 +15,7 @@ public class ChartOfAccount {
     private LocalDateTime createdDate;
     private String createdBy;
     private String coaParent;
-    private String option;
+    private String coaOption;
     private Integer coaLevel;
     private Integer macId;
     private String migCode;

@@ -3,6 +3,7 @@ package com.cv.integration.service;
 import com.cv.integration.common.Voucher;
 import com.cv.integration.entity.SaleHis;
 import com.cv.integration.model.ErrorMessage;
+import com.cv.integration.model.SyncModel;
 import com.cv.integration.model.VoucherInfo;
 import com.cv.integration.mongo.model.PatientInfo;
 
@@ -44,6 +45,7 @@ public interface ReportService {
 
     List<VoucherInfo> getPaymentList(String fromDate, String toDate);
     List<ErrorMessage> getErrorMessage();
+    boolean syncData(List<SyncModel> list);
 
 
 }

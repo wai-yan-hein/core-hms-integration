@@ -2,14 +2,12 @@ package com.cv.integration.controller;
 
 import com.cv.integration.common.Util1;
 import com.cv.integration.common.Voucher;
+import com.cv.integration.model.SyncModel;
 import com.cv.integration.service.ReportService;
 import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.function.ServerResponse;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -22,8 +20,7 @@ import java.util.List;
 @RestController
 @AllArgsConstructor
 public class ReportController {
-    @Autowired
-    private ReportService reportService;
+    private final ReportService reportService;
 
     @GetMapping("/get-sale")
     public ResponseEntity<byte[]> getSaleVoucher(@RequestParam String vouNo) throws SQLException, IOException {
@@ -66,5 +63,7 @@ public class ReportController {
     public Flux<?> checkError() {
         return Flux.empty();
     }
+
+
 
 }

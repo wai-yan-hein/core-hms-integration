@@ -3,20 +3,18 @@ package com.cv.integration.service;
 import com.cv.integration.common.Util1;
 import com.cv.integration.common.Voucher;
 import com.cv.integration.model.ErrorMessage;
+import com.cv.integration.model.SyncModel;
 import com.cv.integration.model.VoucherInfo;
 import com.cv.integration.mongo.model.Doctor;
 import com.cv.integration.mongo.model.PatientInfo;
 import com.cv.integration.mongo.model.Region;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.SessionFactory;
-import org.hibernate.jdbc.Work;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -26,11 +24,10 @@ import java.util.List;
 import java.util.Objects;
 
 @Service
-@Transactional
 @Slf4j
+@RequiredArgsConstructor
 public class ReportServiceImpl implements ReportService {
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     public List<Voucher> getSaleVoucher(String vouNo) throws SQLException {
@@ -608,9 +605,120 @@ public class ReportServiceImpl implements ReportService {
     public List<ErrorMessage> getErrorMessage() {
         return null;
     }
-    private List<ErrorMessage> getDiscountError(){
-        String sql="";
-        return  new ArrayList<>();
+
+    @Override
+    public boolean syncData(List<SyncModel> list) {
+        if (list != null && !list.isEmpty()) {
+            list.forEach(model -> {
+                String fromDate = model.getFromDate();
+                String toDate = model.getToDate();
+                switch (model.getTranSource()) {
+                    case "SALE" -> syncSale(fromDate, toDate);
+                    case "PURCHASE" -> syncPurchase(fromDate, toDate);
+                    case "RETURN_IN" -> syncReturnIn(fromDate, toDate);
+                    case "RETURN_OUT" -> syncReturnOut(fromDate, toDate);
+                    case "OPD" -> syncOPD(fromDate, toDate);
+                    case "OT" -> syncOT(fromDate, toDate);
+                    case "DC" -> syncDC(fromDate, toDate);
+                    case "PAYMENT" -> syncPayment(fromDate, toDate);
+                    case "BILL" -> syncOPDReceive(fromDate, toDate);
+                    case "EXPENSE" -> syncExpense(fromDate, toDate);
+                }
+            });
+            return true;
+        }
+        return false;
+    }
+
+    private void syncSale(String fromDate, String toDate) {
+        String sql = """
+                update sale_his
+                set intg_upd_status = null
+                where date(sale_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+
+    }
+
+    private void syncPurchase(String fromDate, String toDate) {
+        String sql = """
+                update pur_his
+                set intg_upd_status = null
+                where date(pur_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncReturnIn(String fromDate, String toDate) {
+        String sql = """
+                update ret_in_his
+                set intg_upd_status = null
+                where date(ret_in_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncReturnOut(String fromDate, String toDate) {
+        String sql = """
+                update ret_out_his
+                set intg_upd_status = null
+                where date(ret_out_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncOPD(String fromDate, String toDate) {
+        String sql = """
+                update opd_his
+                set intg_upd_status = null
+                where date(opd_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncOT(String fromDate, String toDate) {
+        String sql = """
+                update ot_his
+                set intg_upd_status = null
+                where date(ot_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncDC(String fromDate, String toDate) {
+        String sql = """
+                update dc_his
+                set intg_upd_status = null
+                where date(dc_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncPayment(String fromDate, String toDate) {
+        String sql = """
+                update payment_his
+                set intg_upd_status = null
+                where date(pay_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncOPDReceive(String fromDate, String toDate) {
+        String sql = """
+                update opd_patient_bill_payment
+                set intg_upd_status = null
+                where date(pay_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
+    }
+
+    private void syncExpense(String fromDate, String toDate) {
+        String sql = """
+                update gen_expense
+                set intg_upd_status = null
+                where date(exp_date) between '%s' and '%s'
+                """.formatted(fromDate, toDate);
+        executeSql(sql);
     }
 
 
@@ -619,5 +727,12 @@ public class ReportServiceImpl implements ReportService {
             Statement stmt = con.createStatement();
             return stmt.executeQuery(sql);
         });
+    }
+
+    @Transactional
+    public void executeSql(String... sql) {
+        for (String s : sql) {
+            jdbcTemplate.execute(s);
+        }
     }
 }
