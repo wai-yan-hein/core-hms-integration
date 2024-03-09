@@ -14,8 +14,6 @@ public interface OPDHisRepo extends JpaRepository<OPDHis, String> {
     @Query("select o from OPDHis o where o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
     List<OPDHis> unUploadVoucher(@Param("vou_date") Date syncDate);
 
-    @Query("select o from OPDHis o where o.vouPaid<>0 and o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
-    List<OPDHis> unUploadVoucherCash(@Param("vou_date") Date syncDate);
 
     @Transactional
     @Modifying

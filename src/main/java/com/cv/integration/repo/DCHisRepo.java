@@ -13,8 +13,6 @@ import java.util.List;
 public interface DCHisRepo extends JpaRepository<DCHis, String> {
     @Query("select o from DCHis o where o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
     List<DCHis> unUploadVoucher(@Param("vou_date") Date syncDate);
-    @Query("select o from DCHis o where o.vouPaid<> 0 and o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
-    List<DCHis> unUploadVoucherCash(@Param("vou_date") Date syncDate);
     @Transactional
     @Modifying
     @Query("update DCHis o set o.intgUpdStatus = :status where o.vouNo = :vouNo")

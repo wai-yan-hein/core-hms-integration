@@ -146,9 +146,7 @@ public class AutoUpload {
 
     private void uploadSaleVoucher() {
         if (Util1.getBoolean(uploadSale)) {
-            List<SaleHis> vouchers = isCashOnly() ?
-                    saleHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
-                    saleHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<SaleHis> vouchers = saleHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadSaleVoucher: %s", vouchers.size()));
                 vouchers.forEach(listener::sendSaleVoucherToAccount);
@@ -158,9 +156,7 @@ public class AutoUpload {
 
     private void uploadPurchaseVoucher() {
         if (Util1.getBoolean(uploadPurchase)) {
-            List<PurHis> vouchers = isCashOnly() ?
-                    purHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
-                    purHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<PurHis> vouchers = purHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadPurchaseVoucher: %s", vouchers.size()));
                 vouchers.forEach(listener::sendPurchaseVoucherToAccount);
@@ -170,9 +166,7 @@ public class AutoUpload {
 
     private void uploadReturnInVoucher() {
         if (Util1.getBoolean(uploadReturnIn)) {
-            List<RetInHis> vouchers = isCashOnly() ?
-                    returnInRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
-                    returnInRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<RetInHis> vouchers = returnInRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnInVoucher: %s", vouchers.size()));
                 vouchers.forEach(listener::sendReturnInVoucherToAccount);
@@ -182,9 +176,7 @@ public class AutoUpload {
 
     private void uploadReturnOutVoucher() {
         if (Util1.getBoolean(uploadReturnOut)) {
-            List<RetOutHis> vouchers = isCashOnly() ?
-                    returnOutRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
-                    returnOutRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<RetOutHis> vouchers = returnOutRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnOutVoucher: %s", vouchers.size()));
                 vouchers.forEach(listener::sendReturnOutVoucherToAccount);
@@ -194,9 +186,7 @@ public class AutoUpload {
 
     private void uploadOPDVoucher() {
         if (Util1.getBoolean(uploadOPD)) {
-            List<OPDHis> vouchers = isCashOnly() ?
-                    opdHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
-                    opdHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<OPDHis> vouchers = opdHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDVoucher: %s", vouchers.size()));
                 vouchers.forEach(listener::sendOPDVoucherToAccount);
@@ -206,9 +196,7 @@ public class AutoUpload {
 
     private void uploadOTVoucher() {
         if (Util1.getBoolean(uploadOT)) {
-            List<OTHis> vouchers = isCashOnly() ?
-                    otHisRepo.unUploadVoucherCash(Util1.toDate(syncDate))
-                    : otHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<OTHis> vouchers =otHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOTVoucher: %s", vouchers.size()));
                 vouchers.forEach(listener::sendOTVoucherToAccount);
@@ -220,9 +208,7 @@ public class AutoUpload {
 
     private void uploadDCVoucher() {
         if (Util1.getBoolean(uploadDC)) {
-            List<DCHis> vouchers = isCashOnly() ?
-                    dcHisRepo.unUploadVoucherCash(Util1.toDate(syncDate)) :
-                    dcHisRepo.unUploadVoucher(Util1.toDate(syncDate));
+            List<DCHis> vouchers =dcHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadDCVoucher: %s", vouchers.size()));
                 vouchers.forEach(listener::sendDCVoucherToAccount);

@@ -19,4 +19,8 @@ public class ChartOfAccount {
     private Integer coaLevel;
     private Integer macId;
     private String migCode;
+    private boolean deleted;
+    private boolean credit;
+    private boolean marked;
+
 }

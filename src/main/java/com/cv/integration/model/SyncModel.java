@@ -7,4 +7,5 @@ public class SyncModel {
     private String tranSource;
     private String fromDate;
     private String toDate;
+    private boolean ack;
 }

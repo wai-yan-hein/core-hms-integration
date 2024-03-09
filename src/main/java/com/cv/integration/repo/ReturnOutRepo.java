@@ -13,8 +13,6 @@ import java.util.List;
 public interface ReturnOutRepo extends JpaRepository<RetOutHis, String> {
     @Query("select o from RetOutHis o where o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
     List<RetOutHis> unUploadVoucher(@Param("vou_date") Date syncDate);
-    @Query("select o from RetOutHis o where o.vouPaid<>0 and o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
-    List<RetOutHis> unUploadVoucherCash(@Param("vou_date") Date syncDate);
 
     @Transactional
     @Modifying

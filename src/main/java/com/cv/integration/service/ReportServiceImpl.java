@@ -612,17 +612,18 @@ public class ReportServiceImpl implements ReportService {
             list.forEach(model -> {
                 String fromDate = model.getFromDate();
                 String toDate = model.getToDate();
+                String status = model.isAck() ? "'ACK'" : null;
                 switch (model.getTranSource()) {
-                    case "SALE" -> syncSale(fromDate, toDate);
-                    case "PURCHASE" -> syncPurchase(fromDate, toDate);
-                    case "RETURN_IN" -> syncReturnIn(fromDate, toDate);
-                    case "RETURN_OUT" -> syncReturnOut(fromDate, toDate);
-                    case "OPD" -> syncOPD(fromDate, toDate);
-                    case "OT" -> syncOT(fromDate, toDate);
-                    case "DC" -> syncDC(fromDate, toDate);
-                    case "PAYMENT" -> syncPayment(fromDate, toDate);
-                    case "BILL" -> syncOPDReceive(fromDate, toDate);
-                    case "EXPENSE" -> syncExpense(fromDate, toDate);
+                    case "SALE" -> syncSale(fromDate, toDate, status);
+                    case "PURCHASE" -> syncPurchase(fromDate, toDate, status);
+                    case "RETURN_IN" -> syncReturnIn(fromDate, toDate, status);
+                    case "RETURN_OUT" -> syncReturnOut(fromDate, toDate, status);
+                    case "OPD" -> syncOPD(fromDate, toDate, status);
+                    case "OT" -> syncOT(fromDate, toDate, status);
+                    case "DC" -> syncDC(fromDate, toDate, status);
+                    case "PAYMENT" -> syncPayment(fromDate, toDate, status);
+                    case "BILL" -> syncOPDReceive(fromDate, toDate, status);
+                    case "EXPENSE" -> syncExpense(fromDate, toDate, status);
                 }
             });
             return true;
@@ -630,94 +631,94 @@ public class ReportServiceImpl implements ReportService {
         return false;
     }
 
-    private void syncSale(String fromDate, String toDate) {
+    private void syncSale(String fromDate, String toDate,String status) {
         String sql = """
                 update sale_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(sale_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
 
     }
 
-    private void syncPurchase(String fromDate, String toDate) {
+    private void syncPurchase(String fromDate, String toDate, String status) {
         String sql = """
                 update pur_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(pur_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncReturnIn(String fromDate, String toDate) {
+    private void syncReturnIn(String fromDate, String toDate, String status) {
         String sql = """
                 update ret_in_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(ret_in_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncReturnOut(String fromDate, String toDate) {
+    private void syncReturnOut(String fromDate, String toDate, String status) {
         String sql = """
                 update ret_out_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(ret_out_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncOPD(String fromDate, String toDate) {
+    private void syncOPD(String fromDate, String toDate, String status) {
         String sql = """
                 update opd_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(opd_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncOT(String fromDate, String toDate) {
+    private void syncOT(String fromDate, String toDate, String status) {
         String sql = """
                 update ot_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(ot_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncDC(String fromDate, String toDate) {
+    private void syncDC(String fromDate, String toDate, String status) {
         String sql = """
                 update dc_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(dc_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncPayment(String fromDate, String toDate) {
+    private void syncPayment(String fromDate, String toDate, String status) {
         String sql = """
                 update payment_his
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(pay_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncOPDReceive(String fromDate, String toDate) {
+    private void syncOPDReceive(String fromDate, String toDate, String status) {
         String sql = """
                 update opd_patient_bill_payment
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(pay_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
-    private void syncExpense(String fromDate, String toDate) {
+    private void syncExpense(String fromDate, String toDate, String status) {
         String sql = """
                 update gen_expense
-                set intg_upd_status = null
+                set intg_upd_status = %s
                 where date(exp_date) between '%s' and '%s'
-                """.formatted(fromDate, toDate);
+                """.formatted(status, fromDate, toDate);
         executeSql(sql);
     }
 
