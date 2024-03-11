@@ -92,9 +92,6 @@ public class AutoUpload {
 
     }
 
-    private boolean isCashOnly() {
-        return Util1.getBoolean(environment.getProperty("cash.only"));
-    }
 
     private void uploadOPDSetup() {
         if (Util1.getBoolean(environment.getProperty("upload.opd.setup"))) {

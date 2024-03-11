@@ -110,7 +110,7 @@ public class HMSIntegration {
                     .bodyToMono(Response.class)
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
                             .maxBackoff(Duration.ofMinutes(5))
-                            .doAfterRetry(retrySignal -> log.error("Inventory Retrying..."))
+                            .doAfterRetry(retrySignal -> log.error("Retrying..."))
                     )
                     .doOnError(e -> {
                         log.error("sendAccount: " + e.getMessage());
@@ -173,12 +173,19 @@ public class HMSIntegration {
             if (srcAcc != null) {
                 accountApi.post().uri("/account/deleteGlByAccount")
                         .body(Mono.just(gl), Gl.class).retrieve()
-                        .bodyToMono(String.class).subscribe((t) -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK), (e) -> log.info(e.getMessage()));
+                        .bodyToMono(String.class)
+                        .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
+                                .maxBackoff(Duration.ofMinutes(5))
+                                .doAfterRetry(retrySignal -> log.error("Retrying...")))
+                        .doOnSuccess(s -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK)).block();
             } else {
                 accountApi.post().uri("/account/deleteGlByVoucher")
                         .body(Mono.just(gl), Gl.class)
                         .retrieve().bodyToMono(String.class)
-                        .subscribe((t) -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK), (e) -> log.info(e.getMessage()));
+                        .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
+                                .maxBackoff(Duration.ofMinutes(5))
+                                .doAfterRetry(retrySignal -> log.error("Retrying...")))
+                        .doOnSuccess(s -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK)).block();
             }
         }
 
