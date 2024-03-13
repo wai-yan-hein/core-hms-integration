@@ -83,13 +83,13 @@ public class AutoUpload {
     @Autowired
     private LabCostUpdateService lcuService;
 
-    //@Scheduled(fixedRate = 10 * 60 * 1000)
-    @Scheduled(fixedRate = 1 * 60 * 1000)
+    @Scheduled(fixedRate = 10 * 60 * 1000)
+    //@Scheduled(fixedRate = 1 * 60 * 1000)
     private void autoUpload() {
         if (!syncing) {
             //log.info("autoUpload: Start");
             syncing = true;
-            /*uploadOPDSetup();
+            uploadOPDSetup();
             uploadOTSetup();
             uploadDCSetup();
             uploadTrader();
@@ -103,10 +103,10 @@ public class AutoUpload {
             uploadOTVoucher();
             uploadDCVoucher();
             uploadExpense();
-            uploadOPDReceive();*/
-            log.info("updateLabCost : Start");
+            uploadOPDReceive();
+            //log.info("updateLabCost : Start");
             lcuService.updateLabCost();
-            log.info("updateLabCost : End");
+            //log.info("updateLabCost : End");
             syncing = false;
             //log.info("autoUpload: End");
         }
