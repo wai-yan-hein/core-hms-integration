@@ -1,7 +1,7 @@
 package com.cv.integration.config;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
@@ -16,12 +16,12 @@ import java.time.Duration;
 import java.util.Objects;
 
 @Configuration
+@RequiredArgsConstructor
 @Slf4j
 @PropertySource(value = {"file:config/application.properties"})
 public class WebFlexConfig {
 
-    @Autowired
-    private Environment environment;
+    private final Environment environment;
 
     @Bean
     public WebClient accountApi() {
@@ -53,10 +53,10 @@ public class WebFlexConfig {
     public ConnectionProvider connectionProvider() {
         return ConnectionProvider.builder("custom-provider")
                 .maxConnections(10) // maximum number of connections
-                .maxIdleTime(Duration.ofMinutes(1)) // maximum idle time
-                .maxLifeTime(Duration.ofMinutes(5)) // maximum life time
-                .pendingAcquireTimeout(Duration.ofMinutes(1)) // pending acquire timeout
-                .evictInBackground(Duration.ofMinutes(1)) // eviction interval
+                .maxIdleTime(Duration.ofMinutes(10)) // maximum idle time
+                .maxLifeTime(Duration.ofMinutes(20)) // maximum lifetime
+                .pendingAcquireTimeout(Duration.ofMinutes(10)) // pending acquire timeout
+                .evictInBackground(Duration.ofMinutes(10)) // eviction interval
                 .build();
     }
 

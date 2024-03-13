@@ -13,7 +13,6 @@ import java.util.List;
 public interface OTHisRepo extends JpaRepository<OTHis, String> {
     @Query("select o from OTHis o where o.intgUpdStatus is null and date(o.vouDate) >= :vou_date")
     List<OTHis> unUploadVoucher(@Param("vou_date") Date syncDate);
-
     @Transactional
     @Modifying
     @Query("update OTHis o set o.intgUpdStatus = :status where o.vouNo = :vouNo")

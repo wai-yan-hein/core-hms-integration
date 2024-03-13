@@ -1,54 +1,41 @@
 package com.cv.integration.controller;
 
 import com.cv.integration.entity.*;
+import com.cv.integration.listener.AutoUpload;
 import com.cv.integration.listener.HMSIntegration;
+import com.cv.integration.model.SyncModel;
 import com.cv.integration.repo.*;
 import com.cv.integration.service.ReportService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Optional;
 
 @RestController
 @Slf4j
+@RequiredArgsConstructor
 public class VoucherController {
-    @Autowired
-    private HMSIntegration integration;
-    @Autowired
-    private SaleHisRepo saleHisRepo;
-    @Autowired
-    private PurHisRepo purHisRepo;
-    @Autowired
-    private ReturnInRepo returnInRepo;
-    @Autowired
-    private ReturnOutRepo returnOutRepo;
-    @Autowired
-    private OPDHisRepo opdHisRepo;
-    @Autowired
-    private OTHisRepo otHisRepo;
-    @Autowired
-    private DCHisRepo dcHisRepo;
-    @Autowired
-    private PaymentHisRepo paymentHisRepo;
-    @Autowired
-    private GenExpenseRepo expenseRepo;
-    @Autowired
-    private OPDReceiveRepo opdReceiveRepo;
-    @Autowired
-    private OPDCategoryRepo opdCategoryRepo;
-    @Autowired
-    private OTGroupRepo otGroupRepo;
-    @Autowired
-    private DCGroupRepo dcGroupRepo;
-    @Autowired
-    private ReportService reportService;
+    private final HMSIntegration integration;
+    private final SaleHisRepo saleHisRepo;
+    private final PurHisRepo purHisRepo;
+    private final ReturnInRepo returnInRepo;
+    private final ReturnOutRepo returnOutRepo;
+    private final OPDHisRepo opdHisRepo;
+    private final OTHisRepo otHisRepo;
+    private final DCHisRepo dcHisRepo;
+    private final PaymentHisRepo paymentHisRepo;
+    private final GenExpenseRepo expenseRepo;
+    private final OPDReceiveRepo opdReceiveRepo;
+    private final OPDCategoryRepo opdCategoryRepo;
+    private final DCGroupRepo dcGroupRepo;
+    private final ReportService reportService;
+    private final OTGroupRepo otGroupRepo;
+    private final AutoUpload autoUpload;
 
     @GetMapping("/apiTest")
     private ResponseEntity<?> test() {
@@ -237,5 +224,13 @@ public class VoucherController {
     @GetMapping("/getPaymentList")
     private ResponseEntity<?> getPaymentList(@RequestParam String fromDate, @RequestParam String toDate) {
         return ResponseEntity.ok(reportService.getPaymentList(fromDate, toDate));
+    }
+    @PostMapping("/syncVoucher")
+    public Mono<Boolean> syncVoucher(@RequestBody List<SyncModel> list) {
+        boolean sync =reportService.syncData(list);
+        if(sync){
+            autoUpload.autoUpload();
+        }
+        return Mono.just(true);
     }
 }
