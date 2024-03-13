@@ -85,7 +85,7 @@ public class AutoUpload {
 
     @Scheduled(fixedRate = 10 * 60 * 1000)
     //@Scheduled(fixedRate = 1 * 60 * 1000)
-    private void autoUpload() {
+    public void autoUpload() {
         if (!syncing) {
             //log.info("autoUpload: Start");
             syncing = true;
