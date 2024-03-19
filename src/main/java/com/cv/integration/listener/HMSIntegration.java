@@ -176,7 +176,7 @@ public class HMSIntegration {
                         .bodyToMono(String.class)
                         .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
                                 .maxBackoff(Duration.ofMinutes(5))
-                                .doAfterRetry(retrySignal -> log.error("Retrying...")))
+                                .doAfterRetry(retrySignal -> log.info("Retrying...")))
                         .doOnSuccess(s -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK)).block();
             } else {
                 accountApi.post().uri("/account/deleteGlByVoucher")
@@ -184,7 +184,7 @@ public class HMSIntegration {
                         .retrieve().bodyToMono(String.class)
                         .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
                                 .maxBackoff(Duration.ofMinutes(5))
-                                .doAfterRetry(retrySignal -> log.error("Retrying...")))
+                                .doAfterRetry(retrySignal -> log.info("Retrying...")))
                         .doOnSuccess(s -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK)).block();
             }
         }
@@ -333,6 +333,11 @@ public class HMSIntegration {
                 if (setting != null) {
                     Integer vouStatusId = sh.getVouStatusId();
                     String vouNo = sh.getVouNo();
+                    boolean deleted = sh.isDeleted();
+                    if (deleted) {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        return;
+                    }
                     if (vouStatusId == 1) {
                         String srcAcc = setting.getSourceAcc();
                         String ipdSrc = setting.getIpdSource();
@@ -373,7 +378,6 @@ public class HMSIntegration {
                             }
                         }
                         String curCode = sh.getCurrency().getAccCurCode();
-                        boolean deleted = sh.isDeleted();
                         double vouTotalAmt = Util1.getDouble(sh.getVouTotal());
                         double vouPaidAmt = Util1.getDouble(sh.getVouPaid());
                         double vouDisAmt = Util1.getDouble(sh.getVouDiscount());
@@ -400,7 +404,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setTranSource(tranSource);
                                 gl.setRefNo(vouNo);
-                                gl.setDeleted(deleted);
                                 gl.setMacId(MAC_ID);
                                 listGl.add(gl);
                             }
@@ -430,7 +433,6 @@ public class HMSIntegration {
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
-                            gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
                             listGl.add(gl);
                         }
@@ -453,7 +455,6 @@ public class HMSIntegration {
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
-                            gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
                             gl.setCash(true);
                             listGl.add(gl);
@@ -484,14 +485,18 @@ public class HMSIntegration {
                 String tranSource = "PURCHASE";
                 AccountSetting setting = hmAccSetting.get(tranSource);
                 if (!Objects.isNull(setting)) {
+                    boolean deleted = ph.isDeleted();
                     String vouNo = ph.getVouNo();
+                    if (deleted) {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        return;
+                    }
                     String srcAcc = setting.getSourceAcc();
                     String payAcc = setting.getPayAcc();
                     String balAcc = setting.getBalanceAcc();
                     String deptCode = setting.getDeptCode();
                     LocalDateTime vouDate = ph.getVouDate();
                     String curCode = ph.getCurrency().getAccCurCode();
-                    boolean deleted = ph.isDeleted();
                     double vouPaidAmt = Util1.getDouble(ph.getVouPaid());
                     double vouBalAmt = Util1.getDouble(ph.getVouBalance());
                     Trader trader = ph.getTrader();
@@ -524,7 +529,6 @@ public class HMSIntegration {
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
-                            gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
                             listGl.add(gl);
                         }
@@ -548,7 +552,6 @@ public class HMSIntegration {
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
                         gl.setRefNo(vouNo);
-                        gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
                         gl.setCash(true);
                         listGl.add(gl);
@@ -577,6 +580,11 @@ public class HMSIntegration {
                 AccountSetting setting = hmAccSetting.get(tranSource);
                 if (!Objects.isNull(setting)) {
                     String vouNo = ri.getVouNo();
+                    boolean deleted = ri.isDeleted();
+                    if (deleted) {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        return;
+                    }
                     String srcAcc = setting.getSourceAcc();
                     String payAcc = setting.getPayAcc();
                     String balAcc = setting.getBalanceAcc();
@@ -606,7 +614,6 @@ public class HMSIntegration {
                         traderCode = Util1.isNullOrEmpty(ri.getAdmissionNo()) ? outPatientCode : inPatientCode;
                     }
                     String curCode = ri.getCurrency().getAccCurCode();
-                    boolean deleted = ri.isDeleted();
                     double vouTotalAmt = Util1.getDouble(ri.getVouTotal());
                     double vouPaidAmt = Util1.getDouble(ri.getVouPaid());
                     double vouBalAmt = Util1.getDouble(ri.getVouBalance());
@@ -638,7 +645,6 @@ public class HMSIntegration {
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
-                            gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
                             listGl.add(gl);
                         }
@@ -662,7 +668,6 @@ public class HMSIntegration {
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
                         gl.setRefNo(vouNo);
-                        gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
                         gl.setCash(true);
                         listGl.add(gl);
@@ -691,13 +696,17 @@ public class HMSIntegration {
                 AccountSetting setting = hmAccSetting.get(tranSource);
                 if (!Objects.isNull(setting)) {
                     String vouNo = ro.getVouNo();
+                    boolean deleted = ro.isDeleted();
+                    if (deleted) {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        return;
+                    }
                     String srcAcc = setting.getSourceAcc();
                     String payAcc = setting.getPayAcc();
                     String balAcc = setting.getBalanceAcc();
                     String deptCode = setting.getDeptCode();
                     LocalDateTime vouDate = ro.getVouDate();
                     String curCode = ro.getCurrency().getAccCurCode();
-                    boolean deleted = ro.isDeleted();
                     double vouTotalAmt = Util1.getDouble(ro.getVouTotal());
                     double vouPaidAmt = Util1.getDouble(ro.getVouPaid());
                     double vouBalAmt = Util1.getDouble(ro.getVouBalance());
@@ -731,7 +740,6 @@ public class HMSIntegration {
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
-                            gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
                             listGl.add(gl);
                         }
@@ -755,7 +763,6 @@ public class HMSIntegration {
                         gl.setCreatedBy(APP_NAME);
                         gl.setTranSource(tranSource);
                         gl.setRefNo(vouNo);
-                        gl.setDeleted(deleted);
                         gl.setMacId(MAC_ID);
                         gl.setCash(true);
                         listGl.add(gl);
@@ -782,6 +789,11 @@ public class HMSIntegration {
                 AccountSetting setting = hmAccSetting.get(tranSource);
                 if (!Objects.isNull(setting)) {
                     String vouNo = oh.getVouNo();
+                    boolean deleted = oh.isDeleted();
+                    if (deleted) {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        return;
+                    }
                     String srcAcc = setting.getSourceAcc();
                     String payAcc = setting.getPayAcc();
                     String disAcc = setting.getDiscountAcc();
@@ -807,7 +819,6 @@ public class HMSIntegration {
                         reference = String.format("%s : %s : (%s)", "-", Util1.isNull(oh.getPatientName(), "-"), patientType);
                     }
                     String curCode = oh.getCurrency().getAccCurCode();
-                    boolean deleted = oh.isDeleted();
                     double vouDisAmt = Util1.getDouble(oh.getVouDiscount());
                     double vouPaid = Util1.getDouble(oh.getVouPaid());
                     double vouTotal = Util1.getDouble(oh.getVouTotal());
@@ -867,7 +878,6 @@ public class HMSIntegration {
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
-                                gl.setDeleted(deleted);
                                 gl.setServiceId(serviceId);
                                 gl.setDoctorId(doctorId);
                                 gl.setPatientNo(patientNo);
@@ -913,7 +923,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(serviceId);
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -953,7 +962,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(serviceId);
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -993,7 +1001,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(serviceId);
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1033,7 +1040,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(serviceId);
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1073,7 +1079,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(serviceId);
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1113,7 +1118,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(serviceId);
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1149,7 +1153,6 @@ public class HMSIntegration {
                             gl.setCreatedBy(APP_NAME);
                             gl.setTranSource(tranSource);
                             gl.setRefNo(vouNo);
-                            gl.setDeleted(deleted);
                             gl.setMacId(MAC_ID);
                             gl.setDoctorId(doctorId);
                             gl.setPatientNo(patientNo);
@@ -1176,7 +1179,6 @@ public class HMSIntegration {
                                 gl.setCreatedBy(APP_NAME);
                                 gl.setTranSource(tranSource);
                                 gl.setRefNo(vouNo);
-                                gl.setDeleted(deleted);
                                 gl.setMacId(MAC_ID);
                                 gl.setDoctorId(doctorId);
                                 gl.setPatientNo(patientNo);
@@ -1212,6 +1214,11 @@ public class HMSIntegration {
                 AccountSetting setting = hmAccSetting.get(tranSource);
                 if (!Objects.isNull(setting)) {
                     String vouNo = oh.getVouNo();
+                    boolean deleted = oh.isDeleted();
+                    if (deleted) {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        return;
+                    }
                     String srcAcc = setting.getSourceAcc();
                     String payAcc = setting.getPayAcc();
                     String disAcc = setting.getDiscountAcc();
@@ -1238,7 +1245,6 @@ public class HMSIntegration {
                         reference = String.format("%s : %s : (%s)", "-", "-", patientType);
                     }
                     String curCode = oh.getCurrency().getAccCurCode();
-                    boolean deleted = oh.isDeleted();
                     boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
                     double paymentId = oh.getPaymentId();
                     List<OTHisDetail> listOT = otHisDetailRepo.search(vouNo);
@@ -1296,7 +1302,6 @@ public class HMSIntegration {
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
-                                gl.setDeleted(deleted);
                                 gl.setServiceId(String.valueOf(serviceId));
                                 gl.setDoctorId(doctorId);
                                 gl.setPatientNo(patientNo);
@@ -1337,7 +1342,6 @@ public class HMSIntegration {
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
                                     gl.setTraderCode(traderCode);
-                                    gl.setDeleted(deleted);
                                     gl.setCash(true);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
@@ -1371,7 +1375,6 @@ public class HMSIntegration {
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
                                 gl.setTraderCode(traderCode);
-                                gl.setDeleted(deleted);
                                 gl.setCash(true);
                                 gl.setServiceId(String.valueOf(serviceId));
                                 gl.setDoctorId(doctorId);
@@ -1412,7 +1415,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1439,7 +1441,6 @@ public class HMSIntegration {
                                         gl.setCreatedDate(LocalDateTime.now());
                                         gl.setTranSource(tranSource);
                                         gl.setReference(reference);
-                                        gl.setDeleted(deleted);
                                         gl.setServiceId(String.valueOf(serviceId));
                                         gl.setDoctorId(doctorId);
                                         gl.setPatientNo(patientNo);
@@ -1480,7 +1481,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1520,7 +1520,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1560,7 +1559,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1600,6 +1598,11 @@ public class HMSIntegration {
                 AccountSetting setting = hmAccSetting.get(tranSource);
                 if (!Objects.isNull(setting)) {
                     String vouNo = oh.getVouNo();
+                    boolean deleted = oh.isDeleted();
+                    if (deleted) {
+                        deleteGl(tranSource, vouNo, null, 2);
+                        return;
+                    }
                     String srcAcc = setting.getSourceAcc();
                     String payAcc = setting.getPayAcc();
                     String disAcc = setting.getDiscountAcc();
@@ -1626,7 +1629,6 @@ public class HMSIntegration {
                         reference = String.format("%s : %s : (%s)", "-", "-", patientType);
                     }
                     String curCode = oh.getCurrency().getAccCurCode();
-                    boolean deleted = oh.isDeleted();
                     Integer paymentId = oh.getPaymentId();
                     List<DCHisDetail> listDC = dcHisDetailRepo.search(vouNo);
                     if (!listDC.isEmpty()) {
@@ -1690,7 +1692,6 @@ public class HMSIntegration {
                                 gl.setCreatedDate(LocalDateTime.now());
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
-                                gl.setDeleted(deleted);
                                 gl.setServiceId(String.valueOf(serviceId));
                                 gl.setDoctorId(doctorId);
                                 gl.setPatientNo(patientNo);
@@ -1719,7 +1720,6 @@ public class HMSIntegration {
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
                                     gl.setTraderCode(traderCode);
-                                    gl.setDeleted(deleted);
                                     gl.setCash(true);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
@@ -1754,7 +1754,6 @@ public class HMSIntegration {
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
                                 gl.setTraderCode(traderCode);
-                                gl.setDeleted(deleted);
                                 gl.setCash(true);
                                 gl.setServiceId(String.valueOf(serviceId));
                                 gl.setDoctorId(doctorId);
@@ -1785,7 +1784,6 @@ public class HMSIntegration {
                                 gl.setTranSource(tranSource);
                                 gl.setReference(reference);
                                 gl.setTraderCode(traderCode);
-                                gl.setDeleted(deleted);
                                 gl.setServiceId(String.valueOf(serviceId));
                                 gl.setDoctorId(doctorId);
                                 gl.setPatientNo(patientNo);
@@ -1824,7 +1822,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1851,7 +1848,6 @@ public class HMSIntegration {
                                         gl.setCreatedDate(LocalDateTime.now());
                                         gl.setTranSource(tranSource);
                                         gl.setReference(reference);
-                                        gl.setDeleted(deleted);
                                         gl.setServiceId(String.valueOf(serviceId));
                                         gl.setDoctorId(doctorId);
                                         gl.setPatientNo(patientNo);
@@ -1892,7 +1888,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1932,7 +1927,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -1972,7 +1966,6 @@ public class HMSIntegration {
                                     gl.setCreatedDate(LocalDateTime.now());
                                     gl.setTranSource(tranSource);
                                     gl.setReference(reference);
-                                    gl.setDeleted(deleted);
                                     gl.setServiceId(String.valueOf(serviceId));
                                     gl.setDoctorId(doctorId);
                                     gl.setPatientNo(patientNo);
@@ -2006,6 +1999,7 @@ public class HMSIntegration {
         if (Util1.compareDate(receive.getPayDate(), syncDate)) {
             if (Util1.getBoolean(uploadOPDBill)) {
                 Integer id = receive.getBillId();
+                boolean deleted = receive.isDeleted();
                 if (Util1.getBoolean(receive.getAdjust())) {
                     updateOPDReceive(id, "ADJUST");
                     return;
@@ -2015,7 +2009,6 @@ public class HMSIntegration {
                 double discount = Util1.getDouble(receive.getDiscount());
                 String regNo = receive.getPatient().getPatientNo();
                 String curCode = receive.getCurrency().getAccCurCode();
-                boolean deleted = receive.isDeleted();
                 String tranSource;
                 String deptCode;
                 String cashAcc;
@@ -2041,6 +2034,10 @@ public class HMSIntegration {
                     traderCode = outPatientCode;
                     disAcc = ac.getDiscountAcc();
                     description = "Outpatient Bill";
+                }
+                if (deleted) {
+                    deleteGl(tranSource, String.valueOf(id), null, 2);
+                    return;
                 }
                 String reference = null;
                 Patient p = receive.getPatient();
@@ -2080,7 +2077,6 @@ public class HMSIntegration {
                     gl.setTranSource("BILL_PAYMENT");
                     gl.setReference(reference);
                     gl.setTraderCode(traderCode);
-                    gl.setDeleted(deleted);
                     gl.setCash(true);
                     gl.setPatientNo(regNo);
                     list.add(gl);
@@ -2105,7 +2101,6 @@ public class HMSIntegration {
                     gl.setTranSource("BILL_PAYMENT");
                     gl.setReference(reference);
                     gl.setTraderCode(traderCode);
-                    gl.setDeleted(deleted);
                     gl.setCash(true);
                     gl.setPatientNo(regNo);
                     list.add(gl);
@@ -2226,6 +2221,10 @@ public class HMSIntegration {
                 String balAcc = pay.getTrader().getTraderType().equals("C") ? cusBalAcc : supBalAcc;
                 String reference = pay.getRemark();
                 String description = String.format("%s (%s)", traderType, type.equals("C") ? "Receive" : "Payment");
+                if (deleted) {
+                    deleteGl(tranSource, String.valueOf(payId), null, 2);
+                    return;
+                }
                 List<Gl> listGl = new ArrayList<>();
                 if (payAmt != 0) {
                     Gl gl = new Gl();
@@ -2262,7 +2261,6 @@ public class HMSIntegration {
                     gl.setTranSource(tranSource);
                     gl.setReference(reference);
                     gl.setTraderCode(traderCode);
-                    gl.setDeleted(deleted);
                     gl.setCash(true);
                     listGl.add(gl);
                 } else {
@@ -2294,7 +2292,6 @@ public class HMSIntegration {
                     gl.setTranSource(tranSource);
                     gl.setReference(reference);
                     gl.setTraderCode(traderCode);
-                    gl.setDeleted(deleted);
                     gl.setCash(true);
                     listGl.add(gl);
                 }
