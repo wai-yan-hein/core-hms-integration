@@ -382,6 +382,12 @@ public class HMSIntegration {
                         double vouPaidAmt = Util1.getDouble(sh.getVouPaid());
                         double vouDisAmt = Util1.getDouble(sh.getVouDiscount());
                         double vouBalAmt = Util1.getDouble(sh.getVouBalance());
+                        if (isCashOnly()) {
+                            if (vouPaidAmt == 0) {
+                                deleteGl(tranSource, vouNo, null, 2);
+                                return;
+                            }
+                        }
                         List<Gl> listGl = new ArrayList<>();
                         //income
                         if (vouBalAmt > 0) {
@@ -507,31 +513,35 @@ public class HMSIntegration {
                     String accByLoc = ph.getLocation().getPurAccount();
                     deptCode = Util1.isNull(deptCodeByLoc, deptCode);
                     srcAcc = Util1.isNull(accByLoc, srcAcc);
+                    if (isCashOnly()) {
+                        if (vouPaidAmt == 0) {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            return;
+                        }
+                    }
                     List<Gl> listGl = new ArrayList<>();
                     //income
                     if (vouBalAmt > 0) {
-                        if (!isCashOnly()) {
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            gl.setGlDate(vouDate);
-                            gl.setDescription("Purchase Voucher Total");
-                            gl.setSrcAccCode(srcAcc);
-                            gl.setAccCode(balAcc);
-                            gl.setTraderCode(traderCode);
-                            gl.setDrAmt(vouBalAmt);
-                            gl.setCurCode(curCode);
-                            gl.setReference(reference);
-                            gl.setDeptCode(deptCode);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setTranSource(tranSource);
-                            gl.setRefNo(vouNo);
-                            gl.setMacId(MAC_ID);
-                            listGl.add(gl);
-                        }
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("Purchase Voucher Total");
+                        gl.setSrcAccCode(srcAcc);
+                        gl.setAccCode(balAcc);
+                        gl.setTraderCode(traderCode);
+                        gl.setDrAmt(vouBalAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(reference);
+                        gl.setDeptCode(deptCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setMacId(MAC_ID);
+                        listGl.add(gl);
                     }
                     //payment
                     if (vouPaidAmt > 0) {
@@ -624,30 +634,34 @@ public class HMSIntegration {
                     traderCode = Util1.isNull(traderByLoc, traderCode);
                     srcAcc = Util1.isNull(accByLoc, srcAcc);
                     List<Gl> listGl = new ArrayList<>();
+                    if (isCashOnly()) {
+                        if (vouPaidAmt == 0) {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            return;
+                        }
+                    }
                     //income
                     if (vouBalAmt > 0) {
-                        if (!isCashOnly()) {
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            gl.setGlDate(vouDate);
-                            gl.setDescription("Return In Voucher Total");
-                            gl.setSrcAccCode(srcAcc);
-                            gl.setAccCode(balAcc);
-                            gl.setTraderCode(traderCode);
-                            gl.setDrAmt(vouTotalAmt);
-                            gl.setCurCode(curCode);
-                            gl.setReference(reference);
-                            gl.setDeptCode(deptCode);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setTranSource(tranSource);
-                            gl.setRefNo(vouNo);
-                            gl.setMacId(MAC_ID);
-                            listGl.add(gl);
-                        }
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("Return In Voucher Total");
+                        gl.setSrcAccCode(srcAcc);
+                        gl.setAccCode(balAcc);
+                        gl.setTraderCode(traderCode);
+                        gl.setDrAmt(vouTotalAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(reference);
+                        gl.setDeptCode(deptCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setMacId(MAC_ID);
+                        listGl.add(gl);
                     }
                     //payment
                     if (vouPaidAmt > 0) {
@@ -718,31 +732,35 @@ public class HMSIntegration {
                     String accByLoc = ro.getLocation().getAccCode();
                     deptCode = Util1.isNull(deptCodeByLoc, deptCode);
                     srcAcc = Util1.isNull(accByLoc, srcAcc);
+                    if (isCashOnly()) {
+                        if (vouPaidAmt == 0) {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            return;
+                        }
+                    }
                     List<Gl> listGl = new ArrayList<>();
                     //income
                     if (vouBalAmt > 0) {
-                        if (!isCashOnly()) {
-                            Gl gl = new Gl();
-                            GlKey key = new GlKey();
-                            key.setDeptId(1);
-                            key.setCompCode(compCode);
-                            gl.setKey(key);
-                            gl.setGlDate(vouDate);
-                            gl.setDescription("Return Out Voucher Total");
-                            gl.setSrcAccCode(srcAcc);
-                            gl.setAccCode(balAcc);
-                            gl.setTraderCode(traderCode);
-                            gl.setCrAmt(vouTotalAmt);
-                            gl.setCurCode(curCode);
-                            gl.setReference(reference);
-                            gl.setDeptCode(deptCode);
-                            gl.setCreatedDate(LocalDateTime.now());
-                            gl.setCreatedBy(APP_NAME);
-                            gl.setTranSource(tranSource);
-                            gl.setRefNo(vouNo);
-                            gl.setMacId(MAC_ID);
-                            listGl.add(gl);
-                        }
+                        Gl gl = new Gl();
+                        GlKey key = new GlKey();
+                        key.setDeptId(1);
+                        key.setCompCode(compCode);
+                        gl.setKey(key);
+                        gl.setGlDate(vouDate);
+                        gl.setDescription("Return Out Voucher Total");
+                        gl.setSrcAccCode(srcAcc);
+                        gl.setAccCode(balAcc);
+                        gl.setTraderCode(traderCode);
+                        gl.setCrAmt(vouTotalAmt);
+                        gl.setCurCode(curCode);
+                        gl.setReference(reference);
+                        gl.setDeptCode(deptCode);
+                        gl.setCreatedDate(LocalDateTime.now());
+                        gl.setCreatedBy(APP_NAME);
+                        gl.setTranSource(tranSource);
+                        gl.setRefNo(vouNo);
+                        gl.setMacId(MAC_ID);
+                        listGl.add(gl);
                     }
                     //payment
                     if (vouPaidAmt > 0) {
@@ -824,6 +842,12 @@ public class HMSIntegration {
                     double vouTotal = Util1.getDouble(oh.getVouTotal());
                     boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
                     Integer paymentId = oh.getPaymentId();
+                    if (isCashOnly()) {
+                        if (vouPaid == 0) {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            return;
+                        }
+                    }
                     List<Gl> listGl = new ArrayList<>();
                     List<OPDHisDetail> listOPD = opdHisDetailRepo.search(vouNo);
                     if (!listOPD.isEmpty()) {
@@ -1247,9 +1271,15 @@ public class HMSIntegration {
                     String curCode = oh.getCurrency().getAccCurCode();
                     boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
                     double paymentId = oh.getPaymentId();
-                    List<OTHisDetail> listOT = otHisDetailRepo.search(vouNo);
+                    double vouPaid = oh.getVouPaid();
+                    if (isCashOnly()) {
+                        if (vouPaid == 0) {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            return;
+                        }
+                    }
                     List<Gl> listGl = new ArrayList<>();
-
+                    List<OTHisDetail> listOT = otHisDetailRepo.search(vouNo);
                     if (!listOT.isEmpty()) {
                         for (OTHisDetail ot : listOT) {
                             StringBuilder doctorName = new StringBuilder();
@@ -1630,6 +1660,13 @@ public class HMSIntegration {
                     }
                     String curCode = oh.getCurrency().getAccCurCode();
                     Integer paymentId = oh.getPaymentId();
+                    double vouPaid = oh.getVouPaid();
+                    if (isCashOnly()) {
+                        if (vouPaid == 0) {
+                            deleteGl(tranSource, vouNo, null, 2);
+                            return;
+                        }
+                    }
                     List<DCHisDetail> listDC = dcHisDetailRepo.search(vouNo);
                     if (!listDC.isEmpty()) {
                         List<Gl> listGl = new ArrayList<>();

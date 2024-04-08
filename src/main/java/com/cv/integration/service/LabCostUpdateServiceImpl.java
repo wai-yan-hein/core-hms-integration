@@ -364,10 +364,10 @@ public class LabCostUpdateServiceImpl implements LabCostUpdateService{
                     }
                 }
 
-                log.info("vouTypes : " + vouTypes);
-                log.info("vouNos : " + vouNos);
-                log.info("serviceIds : " + serviceIds);
-                log.info("medIds : " + medIds);
+                //log.info("vouTypes : " + vouTypes);
+                //log.info("vouNos : " + vouNos);
+                //log.info("serviceIds : " + serviceIds);
+                //log.info("medIds : " + medIds);
 
                 if(!medIds.isEmpty()){
                     insertStockFilterCodeMed(medIds);

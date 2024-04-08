@@ -112,10 +112,6 @@ public class AutoUpload {
         }
     }
 
-    private boolean isCashOnly() {
-        return Util1.getBoolean(environment.getProperty("cash.only"));
-    }
-
     private void uploadOPDSetup() {
         if (Util1.getBoolean(environment.getProperty("upload.opd.setup"))) {
             List<OPDCategory> categories = opdGroupRepo.unUploadOPDCategory();
@@ -169,18 +165,7 @@ public class AutoUpload {
             List<SaleHis> vouchers = saleHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadSaleVoucher: %s", vouchers.size()));
-                for (SaleHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendSaleVoucherToAccount(vou);
-                        } else {
-                            listener.updateSale(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendSaleVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendSaleVoucherToAccount);
             }
         }
     }
@@ -190,18 +175,7 @@ public class AutoUpload {
             List<PurHis> vouchers = purHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadPurchaseVoucher: %s", vouchers.size()));
-                for (PurHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendPurchaseVoucherToAccount(vou);
-                        } else {
-                            listener.updatePurchase(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendPurchaseVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendPurchaseVoucherToAccount);
             }
         }
     }
@@ -211,18 +185,8 @@ public class AutoUpload {
             List<RetInHis> vouchers = returnInRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnInVoucher: %s", vouchers.size()));
-                for (RetInHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendReturnInVoucherToAccount(vou);
-                        } else {
-                            listener.updateReturnIn(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendReturnInVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendReturnInVoucherToAccount);
+
             }
         }
     }
@@ -232,18 +196,8 @@ public class AutoUpload {
             List<RetOutHis> vouchers = returnOutRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadReturnOutVoucher: %s", vouchers.size()));
-                for (RetOutHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendReturnOutVoucherToAccount(vou);
-                        } else {
-                            listener.updateReturnOut(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendReturnOutVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendReturnOutVoucherToAccount);
+
             }
         }
     }
@@ -253,18 +207,7 @@ public class AutoUpload {
             List<OPDHis> vouchers = opdHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDVoucher: %s", vouchers.size()));
-                for (OPDHis op : vouchers) {
-                    if (isCashOnly()) {
-                        if (op.getVouPaid() != 0) {
-                            listener.sendOPDVoucherToAccount(op);
-                        } else {
-                            listener.updateOPD(op.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendOPDVoucherToAccount(op);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendOPDVoucherToAccount);
             }
         }
     }
@@ -274,18 +217,8 @@ public class AutoUpload {
             List<OTHis> vouchers = otHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOTVoucher: %s", vouchers.size()));
-                for (OTHis ot : vouchers) {
-                    if (isCashOnly()) {
-                        if (ot.getVouPaid() > 0) {
-                            listener.sendOTVoucherToAccount(ot);
-                        } else {
-                            listener.updateOT(ot.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendOTVoucherToAccount(ot);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendOTVoucherToAccount);
+
             }
         }
     }
@@ -295,18 +228,8 @@ public class AutoUpload {
             List<DCHis> vouchers = dcHisRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadDCVoucher: %s", vouchers.size()));
-                for (DCHis vou : vouchers) {
-                    if (isCashOnly()) {
-                        if (vou.getVouPaid() > 0) {
-                            listener.sendDCVoucherToAccount(vou);
-                        } else {
-                            listener.updateDC(vou.getVouNo(), "ACK");
-                        }
-                    } else {
-                        listener.sendDCVoucherToAccount(vou);
-                    }
-                    sleep();
-                }
+                vouchers.forEach(listener::sendDCVoucherToAccount);
+
             }
         }
     }
