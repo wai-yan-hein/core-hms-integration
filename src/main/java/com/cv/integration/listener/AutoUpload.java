@@ -239,10 +239,7 @@ public class AutoUpload {
             List<PaymentHis> vouchers = paymentHis.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadPayment: %s", vouchers.size()));
-                for (PaymentHis vou : vouchers) {
-                    listener.sendPaymentToAcc(vou);
-                    sleep();
-                }
+                vouchers.forEach(listener::sendPaymentToAcc);
             }
         }
     }
@@ -262,21 +259,10 @@ public class AutoUpload {
             List<OPDReceive> vouchers = opdReceiveRepo.unUploadVoucher(Util1.toDate(syncDate));
             if (!vouchers.isEmpty()) {
                 log.info(String.format("uploadOPDReceive: %s", vouchers.size()));
-                vouchers.forEach(opd -> {
-                    listener.sendOPDReceiveToAccount(opd);
-                    sleep();
-                });
+                vouchers.forEach(listener::sendOPDReceiveToAccount);
             }
 
         }
-    }
-
-    private void sleep() {
-       /* try {
-            TimeUnit.MILLISECONDS.sleep(1);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }*/
     }
 
 }

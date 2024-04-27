@@ -1,28 +1,26 @@
 package com.cv.integration.common;
 
-import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
-
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
-import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.*;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Calendar;
 import java.util.Date;
 
 
 @Slf4j
 public class Util1 {
-    private static final DecimalFormat df0 = new DecimalFormat("0");
 
     public static double getDouble(Object obj) {
         return obj == null ? 0 : Double.parseDouble(obj.toString());
@@ -40,9 +38,6 @@ public class Util1 {
         return isNullOrEmpty(input) ? output : input;
     }
 
-    public static Date getTodayDate() {
-        return Calendar.getInstance().getTime();
-    }
 
     public static String toDateStr(LocalDateTime date) {
         if (date != null) {

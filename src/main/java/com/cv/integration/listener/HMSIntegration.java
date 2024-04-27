@@ -113,7 +113,7 @@ public class HMSIntegration {
                             .doAfterRetry(retrySignal -> log.error("Retrying..."))
                     )
                     .doOnError(e -> {
-                        log.error("sendAccount: " + e.getMessage());
+                        log.error("sendAccount: {}", e.getMessage());
                         String code = glList.getFirst().getRefNo();
                         String tranSource = glList.getFirst().getTranSource();
                         update(tranSource, code, null);
@@ -176,7 +176,7 @@ public class HMSIntegration {
                         .bodyToMono(String.class)
                         .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
                                 .maxBackoff(Duration.ofMinutes(5))
-                                .doAfterRetry(retrySignal -> log.info("Retrying...")))
+                                .doAfterRetry(retrySignal -> log.info("deleteGlByAccount Retrying...")))
                         .doOnSuccess(s -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK)).block();
             } else {
                 accountApi.post().uri("/account/deleteGlByVoucher")
@@ -184,7 +184,7 @@ public class HMSIntegration {
                         .retrieve().bodyToMono(String.class)
                         .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(10))
                                 .maxBackoff(Duration.ofMinutes(5))
-                                .doAfterRetry(retrySignal -> log.info("Retrying...")))
+                                .doAfterRetry(retrySignal -> log.info("deleteGlByVoucher Retrying...")))
                         .doOnSuccess(s -> update(tranSource, vouNo, isCashOnly() ? CRD : ACK)).block();
             }
         }
@@ -290,7 +290,7 @@ public class HMSIntegration {
                     assert trader != null;
                     updateTrader(trader);
                 } catch (Exception e) {
-                    log.error("sendTrader : " + e.getMessage());
+                    log.error("sendTrader : {}", e.getMessage());
                 }
             }
 
@@ -840,6 +840,7 @@ public class HMSIntegration {
                     double vouDisAmt = Util1.getDouble(oh.getVouDiscount());
                     double vouPaid = Util1.getDouble(oh.getVouPaid());
                     double vouTotal = Util1.getDouble(oh.getVouTotal());
+                    double vouGrand = vouTotal -vouDisAmt;
                     boolean admission = !Util1.isNullOrEmpty(oh.getAdmissionNo());
                     Integer paymentId = oh.getPaymentId();
                     if (isCashOnly()) {
@@ -913,7 +914,7 @@ public class HMSIntegration {
                                     gl.setDescription("Return : " + serviceName);
                                     gl.setCrAmt(amount * -1);
                                 }
-                                if (paymentId == 1 && vouTotal == vouPaid) {
+                                if (paymentId == 1 && vouGrand == vouPaid) {
                                     gl.setSrcAccCode(payAcc);
                                     gl.setCash(true);
                                     listGl.add(gl);
@@ -1158,7 +1159,7 @@ public class HMSIntegration {
                             key.setDeptId(1);
                             key.setCompCode(compCode);
                             gl.setKey(key);
-                            if (paymentId == 1 && vouTotal == vouPaid) {
+                            if (paymentId == 1 && vouGrand == vouPaid) {
                                 gl.setSrcAccCode(payAcc);
                                 gl.setAccCode(disAcc);
                                 gl.setCash(true);
@@ -1183,7 +1184,7 @@ public class HMSIntegration {
                             listGl.add(gl);
                         }
                         //paid
-                        if (vouPaid != vouTotal) {
+                        if (vouPaid != vouGrand) {
                             if (vouPaid > 0) {
                                 Gl gl = new Gl();
                                 GlKey key = new GlKey();
