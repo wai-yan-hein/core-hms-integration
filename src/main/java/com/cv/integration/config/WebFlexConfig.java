@@ -1,5 +1,8 @@
 package com.cv.integration.config;
 
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -12,6 +15,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
+import javax.net.ssl.SSLException;
 import java.time.Duration;
 import java.util.Objects;
 
@@ -25,7 +29,7 @@ public class WebFlexConfig {
 
     @Bean
     public WebClient accountApi() {
-        log.info("account api : " + environment.getProperty("account.url"));
+        log.info("account api : {}", environment.getProperty("account.url"));
         return WebClient.builder()
                 .exchangeStrategies(ExchangeStrategies.builder()
                         .codecs(config -> config
@@ -36,9 +40,10 @@ public class WebFlexConfig {
                 .clientConnector(reactorClientHttpConnector())
                 .build();
     }
+
     @Bean
     public WebClient userApi() {
-        log.info("user api : " + environment.getProperty("user.url"));
+        log.info("user api : {}", environment.getProperty("user.url"));
         return WebClient.builder()
                 .exchangeStrategies(ExchangeStrategies.builder()
                         .codecs(config -> config
@@ -49,6 +54,7 @@ public class WebFlexConfig {
                 .clientConnector(reactorClientHttpConnector())
                 .build();
     }
+
     @Bean
     public ConnectionProvider connectionProvider() {
         return ConnectionProvider.builder("custom-provider")
@@ -62,7 +68,14 @@ public class WebFlexConfig {
 
     @Bean
     public HttpClient httpClient() {
-        return HttpClient.create(connectionProvider());
+        try {
+            SslContext sslContext = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build();
+            return HttpClient.create(connectionProvider())
+                    .secure(sslContextSpec -> sslContextSpec.sslContext(sslContext));
+        } catch (SSLException ex) {
+            log.error("Error creating HttpClient: {}", ex.getMessage());
+        }
+        return HttpClient.create(); // Return a default HttpClient if an error occurs
     }
 
     @Bean
